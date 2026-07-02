@@ -29,8 +29,16 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
   // Keep the screen awake during the workout.
   useEffect(() => {
     let lock: WakeLockSentinel | undefined;
-    navigator.wakeLock?.request('screen').then((l) => (lock = l)).catch(() => {});
+    let cancelled = false;
+    navigator.wakeLock
+      ?.request('screen')
+      .then((l) => {
+        if (cancelled) void l.release().catch(() => {});
+        else lock = l;
+      })
+      .catch(() => {});
     return () => {
+      cancelled = true;
       lock?.release().catch(() => {});
     };
   }, []);
@@ -69,6 +77,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
       prevSecs.current = secsLeft;
       transitionTone();
       announce(state);
+      if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
       return;
     }
     if (secsLeft !== prevSecs.current) {
