@@ -3,9 +3,9 @@ import type { Exercise, Session, Settings } from './types';
 import { loadPool, loadSettings, savePool, saveSettings } from './storage';
 import { initAudio } from './audio';
 import { Pool } from './components/Pool';
+import { Setup } from './components/Setup';
 
-// Placeholders — replaced by real components in Tasks 7 and 8.
-const Setup = (_props: Record<string, unknown>) => <p>Setup coming in Task 7</p>;
+// Placeholder — replaced by real component in Task 8.
 const Workout = (_props: Record<string, unknown>) => <p>Workout coming in Task 8</p>;
 
 type Screen = 'setup' | 'pool' | 'workout';
