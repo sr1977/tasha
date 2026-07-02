@@ -41,13 +41,20 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
         value={drafts[key] ?? String(settings[key])}
         onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })}
         onBlur={(e) => {
+          if (drafts[key] === undefined) return; // never edited -> nothing to commit
           const clamped = Math.max(min, Number(e.target.value) || min);
+          const clearDraft = () =>
+            setDrafts((d) => {
+              const next = { ...d };
+              delete next[key];
+              return next;
+            });
+          if (clamped === settings[key]) {
+            clearDraft(); // unchanged value -> don't invalidate the session
+            return;
+          }
           setSettings({ ...settings, [key]: clamped });
-          setDrafts((d) => {
-            const next = { ...d };
-            delete next[key];
-            return next;
-          });
+          clearDraft();
         }}
       />
     </label>
