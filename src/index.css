@@ -1,0 +1,87 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #14161a;
+  color: #e8e8e8;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  background: #2a2e35;
+  color: inherit;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+input, select {
+  font: inherit;
+  background: #1d2025;
+  color: inherit;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+/* ---- app shell ---- */
+.app { max-width: 640px; margin: 0 auto; padding: 1.5rem; }
+.app nav { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+.warn { color: #f0b429; }
+
+/* ---- setup ---- */
+.settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+.settings-grid label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: #aaa; }
+.settings-grid input { width: 6rem; }
+.stations { padding-left: 1.5rem; }
+.stations li { margin: 0.35rem 0; }
+.stations small { color: #888; }
+.start {
+  display: block;
+  margin-top: 1rem;
+  font-size: 1.3rem;
+  padding: 0.8rem 2rem;
+  background: #2f7d4f;
+  border-color: #2f7d4f;
+}
+
+/* ---- pool ---- */
+.add-row, .filters { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.filters { color: #aaa; font-size: 0.9rem; }
+.pool-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.pool-list li { display: flex; gap: 0.5rem; align-items: center; }
+.pool-list input { flex: 1; }
+
+/* ---- workout ---- */
+.workout {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  transition: background 0.3s;
+}
+.workout.prep { background: #7a5c12; }
+.workout.work { background: #1e5c38; }
+.workout.rest { background: #1d4568; }
+.workout.roundRest { background: #4a3670; }
+.workout.paused { filter: grayscale(0.7) brightness(0.7); }
+.workout.done { background: #14161a; }
+.workout .meta { font-size: 1.4rem; color: rgba(255, 255, 255, 0.75); }
+.workout .label { font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 700; line-height: 1.1; }
+.workout .clock {
+  font-size: clamp(6rem, 28vw, 18rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.workout .next { font-size: 1.6rem; color: rgba(255, 255, 255, 0.85); }
+.workout .controls { display: flex; gap: 1rem; }
+.workout .controls button { font-size: 2rem; padding: 0.6rem 1.6rem; background: rgba(0, 0, 0, 0.3); }
+.workout .exit { position: absolute; top: 1rem; right: 1rem; background: rgba(0, 0, 0, 0.3); }
+progress { width: min(80vw, 600px); height: 8px; }
