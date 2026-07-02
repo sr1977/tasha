@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef } from 'react';
 import type { Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
-import { beep, speak, transitionTone } from '../audio';
+import { beep, cancelSpeech, speak, transitionTone } from '../audio';
 import { sessionDuration } from '../generator';
 import { fmt } from './Setup';
 
@@ -25,6 +25,9 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
     }, 250);
     return () => clearInterval(id);
   }, []);
+
+  // Stop any in-flight speech when the workout unmounts (e.g. user exits).
+  useEffect(() => cancelSpeech, []);
 
   // Keep the screen awake during the workout.
   useEffect(() => {
@@ -100,6 +103,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
 
   const iv = state.session[state.index];
   const stationsPerRound = Math.max(...session.map((i) => i.station));
+  const totalRounds = session[session.length - 1].round;
   const total = sessionDuration(session);
   const elapsed =
     session.slice(0, state.index).reduce((t, i) => t + i.duration, 0) +
@@ -109,7 +113,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
     <div className={`workout ${iv.kind}${state.status === 'paused' ? ' paused' : ''}`}>
       <button className="exit" onClick={onExit}>Exit</button>
       <div className="meta">
-        Round {iv.round}
+        Round {iv.round}/{totalRounds}
         {iv.kind === 'work' && ` · Station ${iv.station}/${stationsPerRound}`}
         {state.status === 'paused' && ' · PAUSED'}
       </div>

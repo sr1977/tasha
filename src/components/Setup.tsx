@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Exercise, Session, Settings } from '../types';
 import { buildSession, generateSession, roundCount, sessionDuration } from '../generator';
 
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function Setup({ pool, settings, setSettings, session, setSession, onStart, goToPool }: Props) {
+  const [drafts, setDrafts] = useState<Partial<Record<keyof Settings, string>>>({});
   const stations =
     session?.filter((iv) => iv.kind === 'work' && iv.round === 1).map((iv) => iv.exercise!) ?? null;
 
@@ -36,8 +38,17 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
       <input
         type="number"
         min={min}
-        value={settings[key]}
-        onChange={(e) => setSettings({ ...settings, [key]: Math.max(min, Number(e.target.value) || min) })}
+        value={drafts[key] ?? String(settings[key])}
+        onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })}
+        onBlur={(e) => {
+          const clamped = Math.max(min, Number(e.target.value) || min);
+          setSettings({ ...settings, [key]: clamped });
+          setDrafts((d) => {
+            const next = { ...d };
+            delete next[key];
+            return next;
+          });
+        }}
       />
     </label>
   );

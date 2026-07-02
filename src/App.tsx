@@ -17,6 +17,7 @@ export default function App() {
   const setPool = (p: Exercise[]) => {
     setPoolState(p);
     savePool(p);
+    setSession(null); // pool changed -> stale session may reference deleted exercises
   };
   const setSettings = (s: Settings) => {
     setSettingsState(s);

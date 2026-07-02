@@ -37,4 +37,19 @@ describe('storage', () => {
     saveSettings({ ...DEFAULT_SETTINGS, stations: 8 });
     expect(loadSettings().stations).toBe(8);
   });
+
+  it('falls back to seed pool when stored value is JSON null', () => {
+    store.set('tasha.pool', 'null');
+    expect(loadPool()).toEqual(SEED_POOL);
+  });
+
+  it('falls back to seed pool when stored value is not an array', () => {
+    store.set('tasha.pool', '{"a":1}');
+    expect(loadPool()).toEqual(SEED_POOL);
+  });
+
+  it('falls back to defaults when stored settings are not an object', () => {
+    store.set('tasha.settings', '"hello"');
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+  });
 });

@@ -3,7 +3,7 @@ let ctx: AudioContext | null = null;
 export function initAudio(): void {
   try {
     ctx = ctx ?? new AudioContext();
-    void ctx.resume();
+    ctx.resume().catch(() => {});
   } catch {
     ctx = null;
   }
@@ -37,5 +37,13 @@ export function speak(text: string): void {
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   } catch {
     // voice unavailable -> beeps only
+  }
+}
+
+export function cancelSpeech(): void {
+  try {
+    window.speechSynthesis?.cancel();
+  } catch {
+    // ignore
   }
 }

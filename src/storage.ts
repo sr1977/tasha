@@ -14,7 +14,8 @@ function load<T>(key: string, fallback: T): T {
 }
 
 export function loadPool(): Exercise[] {
-  return load(POOL_KEY, SEED_POOL);
+  const parsed = load<unknown>(POOL_KEY, SEED_POOL);
+  return Array.isArray(parsed) ? (parsed as Exercise[]) : SEED_POOL;
 }
 
 export function savePool(pool: Exercise[]): void {
@@ -22,7 +23,9 @@ export function savePool(pool: Exercise[]): void {
 }
 
 export function loadSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...load<Partial<Settings>>(SETTINGS_KEY, {}) };
+  const parsed = load<unknown>(SETTINGS_KEY, {});
+  const partial = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Settings>) : {};
+  return { ...DEFAULT_SETTINGS, ...partial };
 }
 
 export function saveSettings(s: Settings): void {
