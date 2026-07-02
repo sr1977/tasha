@@ -72,6 +72,33 @@ describe('timer', () => {
     expect(s.remainingMs).toBe(2000);
   });
 
+  it('tick spanning multiple intervals carries overflow across each boundary', () => {
+    // 8000ms from start: prep(2000) + work(5000) consumed, 1000 into rest -> 2000 left
+    const s = tick(initTimer(session), 8000);
+    expect(s.index).toBe(2);
+    expect(s.remainingMs).toBe(2000);
+    expect(s.status).toBe('running');
+  });
+
+  it('tick landing exactly on a boundary advances to the next interval at full duration', () => {
+    const s = tick(initTimer(session), 2000);
+    expect(s.index).toBe(1);
+    expect(s.remainingMs).toBe(5000);
+  });
+
+  it('prev at exactly 2s elapsed goes to the previous interval (strict > threshold)', () => {
+    const atTwo: TimerState = { session, index: 1, remainingMs: 3000, status: 'running' }; // exactly 2s elapsed
+    const s = timerReducer(atTwo, { type: 'prev' });
+    expect(s.index).toBe(0);
+    expect(s.remainingMs).toBe(2000);
+  });
+
+  it('pause and resume on a done state are no-ops', () => {
+    const done: TimerState = { session, index: 2, remainingMs: 0, status: 'done' };
+    expect(timerReducer(done, { type: 'pause' })).toEqual(done);
+    expect(timerReducer(done, { type: 'resume' })).toEqual(done);
+  });
+
   it('done state ignores further actions', () => {
     const done: TimerState = { session, index: 2, remainingMs: 0, status: 'done' };
     expect(timerReducer(done, { type: 'next' })).toEqual(done);
