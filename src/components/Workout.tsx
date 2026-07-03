@@ -262,7 +262,7 @@ export function Workout({
         {state.status === 'paused' && ' · PAUSED'}
       </div>
       {partnerOn && iv.kind === 'work' ? (
-        <div className="label partner">
+        <div className="label partner" key={state.index}>
           {partnerExercises(stations, iv.station).map((e, i) => (
             <div key={i}>
               {partner!.names[i]}: {e.name}
@@ -271,7 +271,7 @@ export function Workout({
         </div>
       ) : (
         <>
-          <div className="label">
+          <div className="label" key={state.index}>
             {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
           </div>
           {!partnerOn && iv.kind === 'work' && iv.exercise?.cue && (
