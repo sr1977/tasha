@@ -40,10 +40,13 @@ export function Workout({
   const ban = () => {
     const iv = state.session[state.index];
     if (iv.kind !== 'work' || !iv.exercise) return;
-    const stations = state.session
-      .filter((x) => x.kind === 'work' && x.round === 1)
-      .map((x) => x.exercise!);
-    const replacement = banReplacement(pool, stations, iv.exercise);
+    // Exercises actually in use from the current interval onward — round-1
+    // snapshots go stale once a previous ban has already replaced something.
+    const inUse = new Map<string, Exercise>();
+    state.session.forEach((x, i) => {
+      if (i >= state.index && x.kind === 'work' && x.exercise) inUse.set(x.exercise.id, x.exercise);
+    });
+    const replacement = banReplacement(pool, [...inUse.values()], iv.exercise);
     onBan(iv.exercise);
     if (replacement) {
       dispatch({
@@ -215,7 +218,7 @@ export function Workout({
           {state.status === 'paused' ? '▶' : '⏸'}
         </button>
         <button onClick={() => dispatch({ type: 'next' })} title="Skip (→)">⏭</button>
-        {iv.kind === 'work' && (
+        {iv.kind === 'work' && pool.find((p) => p.id === iv.exercise!.id)?.pref !== 'ban' && (
           <button onClick={ban} title="Never again — ban this exercise and swap it out">👎</button>
         )}
       </div>
