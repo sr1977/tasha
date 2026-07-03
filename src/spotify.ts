@@ -281,7 +281,7 @@ export interface PlayerHandle {
   resume(): void;
   skipTrack(): void;
   setBaseVolume(v: number): void;
-  duck(): void;
+  duck(volume?: number, ms?: number): void;
   disconnect(): void;
   onTrack(cb: (label: string | null) => void): void;
 }
@@ -428,13 +428,13 @@ async function buildPlayer(): Promise<PlayerHandle | null> {
       baseVolume = v;
       if (duckTimer === undefined) applyBase(); // mid-duck: restore picks up new base
     },
-    duck() {
+    duck(volume = DUCK_VOLUME, ms = DUCK_MS) {
       clearTimeout(duckTimer);
-      player.setVolume(DUCK_VOLUME).catch(() => {});
+      player.setVolume(volume).catch(() => {});
       duckTimer = setTimeout(() => {
         duckTimer = undefined;
         applyBase();
-      }, DUCK_MS);
+      }, ms);
     },
     disconnect() {
       clearTimeout(duckTimer);
