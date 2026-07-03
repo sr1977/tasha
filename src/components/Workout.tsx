@@ -192,6 +192,7 @@ export function Workout({
   const prevIndex = useRef(state.index);
   const prevSecs = useRef(secsLeft);
   const prevStatus = useRef(state.status);
+  const halfwayRef = useRef(-1); // interval index that already got its halfway call
   useEffect(() => {
     if (state.status === 'done') {
       if (prevStatus.current !== 'done') {
@@ -213,8 +214,23 @@ export function Workout({
       return;
     }
     if (secsLeft !== prevSecs.current) {
+      const prev = prevSecs.current;
       prevSecs.current = secsLeft;
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
+      const cur = state.session[state.index];
+      const half = Math.ceil(cur.duration / 2);
+      if (
+        state.status === 'running' &&
+        cur.kind === 'work' &&
+        cur.duration >= 10 && // short intervals: halfway collides with 3-2-1 beeps
+        prev > half &&
+        secsLeft <= half &&
+        halfwayRef.current !== state.index
+      ) {
+        halfwayRef.current = state.index;
+        speak('Halfway!');
+        playerRef.current?.duck();
+      }
     }
   });
 
