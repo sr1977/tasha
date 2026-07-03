@@ -39,7 +39,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
           return;
         }
         playerRef.current = p;
-        p.onTrack((name, artist) => setTrack(`${name} — ${artist}`));
+        p.onTrack((label) => setTrack(label));
         p.setBaseVolume(kindRef.current === 'work' ? WORK_VOLUME : DIP_VOLUME);
         void p
           .play(pl.uri)

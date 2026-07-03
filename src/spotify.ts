@@ -128,20 +128,54 @@ async function exchangeCallback(): Promise<boolean> {
   return auth !== null;
 }
 
+let refreshPromise: Promise<StoredAuth | null | 'network'> | null = null;
+
+// Distinct from tokenRequest: refresh must tell apart a definitive HTTP
+// rejection (rotated/invalid refresh token -> null) from a transient network
+// failure (thrown fetch error -> 'network'), since only the former should
+// wipe a stored session.
+async function refreshAccessToken(refreshToken: string): Promise<StoredAuth | null | 'network'> {
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return {
+      accessToken: json.access_token,
+      refreshToken: json.refresh_token ?? loadAuth()?.refreshToken ?? refreshToken,
+      expiresAt: Date.now() + json.expires_in * 1000,
+    };
+  } catch {
+    return 'network';
+  }
+}
+
 export async function getAccessToken(): Promise<string | null> {
   const auth = loadAuth();
   if (!auth) return null;
   if (!tokenNeedsRefresh(auth, Date.now())) return auth.accessToken;
-  const next = await tokenRequest({
-    grant_type: 'refresh_token',
-    refresh_token: auth.refreshToken,
-  });
-  if (!next) {
-    disconnect(); // refresh failed -> treat as disconnected
+
+  // Single-flight: PKCE refresh tokens rotate, so two concurrent refreshes
+  // (SDK getOAuthToken + an api() call) both racing against the same stored
+  // refresh token would have the loser rejected. Share one in-flight promise.
+  refreshPromise ??= refreshAccessToken(auth.refreshToken);
+  const outcome = await refreshPromise;
+  refreshPromise = null;
+
+  if (outcome === 'network') return auth.accessToken; // transient failure: fail soft, keep stale token
+  if (outcome === null) {
+    disconnect(); // refresh definitively rejected -> treat as disconnected
     return null;
   }
-  localStorage.setItem(AUTH_KEY, JSON.stringify(next));
-  return next.accessToken;
+  localStorage.setItem(AUTH_KEY, JSON.stringify(outcome));
+  return outcome.accessToken;
 }
 
 // ---------- playlist persistence ----------
@@ -169,7 +203,8 @@ export function clearActiveId(): void {
 
 export function activePlaylist(): SpotifyPlaylist | null {
   const id = loadActiveId();
-  return loadPlaylists().find((p) => p.id === id) ?? null;
+  const list = loadPlaylists();
+  return list.find((p) => p.id === id) ?? list[0] ?? null;
 }
 
 export function playerError(): string | null {
@@ -212,7 +247,11 @@ function loadSdk(): Promise<boolean> {
     window.onSpotifyWebPlaybackSDKReady = () => resolve(true);
     const s = document.createElement('script');
     s.src = 'https://sdk.scdn.co/spotify-player.js';
-    s.onerror = () => resolve(false);
+    s.onerror = () => {
+      s.remove(); // don't leave a dead <script> tag behind
+      sdkPromise = null; // allow a later createPlayer() to retry the load
+      resolve(false);
+    };
     document.head.appendChild(s);
   });
   return sdkPromise;
@@ -226,7 +265,7 @@ export interface PlayerHandle {
   setBaseVolume(v: number): void;
   duck(): void;
   disconnect(): void;
-  onTrack(cb: (name: string, artist: string) => void): void;
+  onTrack(cb: (label: string | null) => void): void;
 }
 
 export async function createPlayer(): Promise<PlayerHandle | null> {
@@ -241,7 +280,7 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
     volume: WORK_VOLUME,
   });
 
-  let trackCb: ((name: string, artist: string) => void) | null = null;
+  let trackCb: ((label: string | null) => void) | null = null;
   let baseVolume = WORK_VOLUME;
   let duckTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -259,11 +298,12 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
   });
 
   player.addListener('player_state_changed', (data: never) => {
+    if (!trackCb) return;
     const s = data as {
       track_window?: { current_track?: { name: string; artists?: { name: string }[] } };
     } | null;
     const t = s?.track_window?.current_track;
-    if (t && trackCb) trackCb(t.name, t.artists?.map((a) => a.name).join(', ') ?? '');
+    trackCb(t ? `${t.name} — ${t.artists?.map((a) => a.name).join(', ') ?? ''}` : null);
   });
 
   if (!(await player.connect())) return null;

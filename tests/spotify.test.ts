@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const store = new Map<string, string>();
+vi.stubGlobal('localStorage', {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, v),
+  removeItem: (k: string) => void store.delete(k),
+});
+
 import {
+  activePlaylist,
   challenge,
   generateVerifier,
   parsePlaylistInput,
+  saveActiveId,
+  savePlaylists,
   tokenNeedsRefresh,
+  type SpotifyPlaylist,
 } from '../src/spotify';
 
 describe('parsePlaylistInput', () => {
@@ -50,6 +62,32 @@ describe('PKCE helpers', () => {
     expect(c1).toBe(c2);
     expect(c1).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(await challenge('different')).not.toBe(c1);
+  });
+});
+
+describe('activePlaylist', () => {
+  beforeEach(() => store.clear());
+
+  const playlists: SpotifyPlaylist[] = [
+    { id: 'a', name: 'Alpha', uri: 'spotify:playlist:a' },
+    { id: 'b', name: 'Beta', uri: 'spotify:playlist:b' },
+  ];
+
+  it('returns the playlist matching the stored active id', () => {
+    savePlaylists(playlists);
+    saveActiveId('b');
+    expect(activePlaylist()).toEqual(playlists[1]);
+  });
+
+  it('falls back to the first playlist when the stored id is stale', () => {
+    savePlaylists(playlists);
+    saveActiveId('does-not-exist');
+    expect(activePlaylist()).toEqual(playlists[0]);
+  });
+
+  it('returns null when no playlists exist', () => {
+    saveActiveId('a');
+    expect(activePlaylist()).toBeNull();
   });
 });
 

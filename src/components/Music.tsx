@@ -81,7 +81,10 @@ export function Music() {
       {playlists.length > 0 && (
         <label>
           Play during workout
-          <select value={activeId ?? ''} onChange={(e) => setActive(e.target.value)}>
+          <select
+            value={activeId ?? playlists[0]?.id ?? ''}
+            onChange={(e) => setActive(e.target.value)}
+          >
             {playlists.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -97,7 +100,12 @@ export function Music() {
         ))}
       </ul>
       <div className="add-row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="Name"
+        />
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
