@@ -46,6 +46,8 @@ export function speak(text: string): void {
     window.speechSynthesis.cancel();
     const gen = ++utteranceGen;
     const u = new SpeechSynthesisUtterance(text);
+    const voice = pickVoice(listVoices(), getVoiceName());
+    if (voice) u.voice = voice;
     u.onstart = () => {
       if (gen === utteranceGen) speechListener?.(true);
     };
@@ -67,4 +69,61 @@ export function cancelSpeech(): void {
   } catch {
     // ignore
   }
+}
+
+// ---------- coach voice selection ----------
+
+const VOICE_KEY = 'tasha.voiceName';
+const FEMALE_SYSTEM_VOICES = ['Samantha', 'Karen', 'Moira', 'Tessa'];
+
+export interface VoiceLike {
+  name: string;
+  lang: string;
+}
+
+export function pickVoice<T extends VoiceLike>(voices: T[], savedName: string | null): T | null {
+  const saved = savedName ? voices.find((v) => v.name === savedName) : undefined;
+  if (saved) return saved;
+  return (
+    voices.find((v) => v.name === 'Google UK English Female') ??
+    voices.find(
+      (v) => v.name.startsWith('Google') && v.lang.startsWith('en') && v.name.includes('Female'),
+    ) ??
+    voices.find((v) => FEMALE_SYSTEM_VOICES.includes(v.name)) ??
+    null
+  );
+}
+
+let voiceCache: SpeechSynthesisVoice[] = [];
+
+function refreshVoices(): void {
+  try {
+    voiceCache = window.speechSynthesis
+      .getVoices()
+      .filter((v) => v.lang.toLowerCase().startsWith('en'));
+  } catch {
+    voiceCache = [];
+  }
+}
+
+export function listVoices(): SpeechSynthesisVoice[] {
+  if (voiceCache.length === 0) refreshVoices();
+  return voiceCache;
+}
+
+if (typeof window !== 'undefined') {
+  try {
+    window.speechSynthesis?.addEventListener?.('voiceschanged', refreshVoices);
+  } catch {
+    // no speech synthesis -> picker stays hidden
+  }
+}
+
+export function getVoiceName(): string | null {
+  return localStorage.getItem(VOICE_KEY);
+}
+
+export function setVoiceName(name: string): void {
+  if (name) localStorage.setItem(VOICE_KEY, name);
+  else localStorage.removeItem(VOICE_KEY);
 }
