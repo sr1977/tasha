@@ -208,6 +208,23 @@ export function activePlaylist(): SpotifyPlaylist | null {
   return list.find((p) => p.id === id) ?? list[0] ?? null;
 }
 
+const COOLDOWN_KEY = 'tasha.spotify.cooldown';
+
+export function loadCooldownId(): string | null {
+  return localStorage.getItem(COOLDOWN_KEY);
+}
+
+export function saveCooldownId(id: string): void {
+  if (id) localStorage.setItem(COOLDOWN_KEY, id);
+  else localStorage.removeItem(COOLDOWN_KEY);
+}
+
+export function cooldownPlaylist(): SpotifyPlaylist | null {
+  const id = loadCooldownId();
+  if (!id) return null;
+  return loadPlaylists().find((p) => p.id === id) ?? null;
+}
+
 export function playerError(): string | null {
   return localStorage.getItem(ERROR_KEY);
 }

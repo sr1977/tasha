@@ -54,6 +54,12 @@ input, select {
 .pool-list li { display: flex; gap: 0.5rem; align-items: center; }
 .pool-list input { flex: 1; }
 
+/* ---- preferences & cues ---- */
+.pool-list .pref { min-width: 2.4rem; }
+.pool-list .pref.fav { color: #f0b429; }
+.pool-list .pref.ban { filter: none; }
+.pool-list .cue-input { flex: 1; font-size: 0.85rem; color: #aaa; }
+
 /* ---- workout ---- */
 .workout {
   position: fixed;
@@ -96,3 +102,14 @@ progress { width: min(80vw, 600px); height: 8px; }
 /* ---- track display ---- */
 .workout .track { position: absolute; bottom: 1rem; right: 1rem; display: flex; gap: 0.5rem; align-items: center; font-size: 1rem; color: rgba(255, 255, 255, 0.8); max-width: 40vw; }
 .workout .track button { font-size: 1rem; padding: 0.3rem 0.7rem; background: rgba(0, 0, 0, 0.3); }
+
+.workout .cue { font-size: 1.3rem; color: rgba(255, 255, 255, 0.75); font-style: italic; }
+
+/* ---- voice control ---- */
+.workout .mic { position: absolute; top: 1rem; left: 1rem; background: rgba(0, 0, 0, 0.3); }
+.workout .mic.off { opacity: 0.4; text-decoration: line-through; }
+
+/* ---- partner mode ---- */
+.partner-toggle { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; color: #aaa; }
+.partner-names { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.workout .label.partner { font-size: clamp(1.6rem, 5vw, 3.2rem); display: flex; flex-direction: column; gap: 0.3rem; }

@@ -54,7 +54,8 @@ one-line cue (e.g. Squats → "drive through the heels").
 (smaller text, class `.cue`). Rest announcements append the upcoming
 exercise's cue: "Rest. Next up: squats — drive through the heels". Work-start
 announcements stay short ("Squats. Go!"). Missing cue → no dash, no change.
-In partner mode (§5) cues are omitted from announcements but still shown.
+In partner mode (§5) cues are omitted from announcements AND not rendered
+(screen space is used by the dual assignment display).
 
 ## 3. Voice control
 

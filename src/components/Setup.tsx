@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Exercise, Session, Settings } from '../types';
-import { buildSession, generateSession, roundCount, sessionDuration } from '../generator';
+import { banReplacement, buildSession, generateSession, roundCount, sessionDuration } from '../generator';
 import { Music } from './Music';
 
 export const fmt = (secs: number) =>
@@ -23,13 +23,10 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
 
   const swap = (i: number) => {
     if (!stations) return;
-    const current = stations[i];
-    const usedIds = new Set(stations.map((s) => s.id));
-    const sameCat = pool.filter((e) => e.category === current.category && !usedIds.has(e.id));
-    const candidates = sameCat.length > 0 ? sameCat : pool.filter((e) => !usedIds.has(e.id));
-    if (candidates.length === 0) return;
+    const replacement = banReplacement(pool, stations, stations[i]);
+    if (!replacement) return;
     const next = [...stations];
-    next[i] = candidates[Math.floor(Math.random() * candidates.length)];
+    next[i] = replacement;
     setSession(buildSession(next, settings));
   };
 
@@ -72,6 +69,35 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           {num('roundRestSecs', 'Round rest (seconds)', 0)}
           {num('totalMins', 'Target length (minutes)', 5)}
         </div>
+        <label className="partner-toggle">
+          <input
+            type="checkbox"
+            checked={settings.partner?.on ?? false}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                partner: { on: e.target.checked, names: settings.partner?.names ?? ['A', 'B'] },
+              })
+            }
+          />
+          Partner mode — two people, offset stations
+        </label>
+        {settings.partner?.on && (
+          <div className="partner-names">
+            {([0, 1] as const).map((i) => (
+              <input
+                key={i}
+                value={settings.partner!.names[i]}
+                onChange={(e) => {
+                  const names: [string, string] = [...settings.partner!.names];
+                  names[i] = e.target.value;
+                  setSettings({ ...settings, partner: { on: true, names } });
+                }}
+                placeholder={`Partner ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
         {pool.length === 0 ? (
           <p className="warn">
             Your exercise pool is empty. <button onClick={goToPool}>Add exercises</button>

@@ -12,7 +12,8 @@ export type TimerAction =
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'next' }
-  | { type: 'prev' };
+  | { type: 'prev' }
+  | { type: 'replace'; session: Session };
 
 export function initTimer(session: Session): TimerState {
   return { session, index: 0, remainingMs: session[0].duration * 1000, status: 'running' };
@@ -49,5 +50,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       }
       return { ...state, index: i, remainingMs: remaining };
     }
+    case 'replace':
+      return { ...state, session: action.session };
   }
 }

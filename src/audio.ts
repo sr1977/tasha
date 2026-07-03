@@ -1,4 +1,6 @@
 let ctx: AudioContext | null = null;
+let speechListener: ((speaking: boolean) => void) | null = null;
+let utteranceGen = 0;
 
 export function initAudio(): void {
   try {
@@ -7,6 +9,14 @@ export function initAudio(): void {
   } catch {
     ctx = null;
   }
+}
+
+export function onSpeaking(cb: (speaking: boolean) => void): void {
+  speechListener = cb;
+}
+
+export function offSpeaking(cb: (speaking: boolean) => void): void {
+  if (speechListener === cb) speechListener = null;
 }
 
 function tone(freq: number, ms: number): void {
@@ -34,7 +44,18 @@ export function speak(text: string): void {
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    const gen = ++utteranceGen;
+    const u = new SpeechSynthesisUtterance(text);
+    u.onstart = () => {
+      if (gen === utteranceGen) speechListener?.(true);
+    };
+    u.onend = () => {
+      if (gen === utteranceGen) speechListener?.(false);
+    };
+    u.onerror = () => {
+      if (gen === utteranceGen) speechListener?.(false);
+    };
+    window.speechSynthesis.speak(u);
   } catch {
     // voice unavailable -> beeps only
   }

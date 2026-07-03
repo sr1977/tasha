@@ -10,6 +10,7 @@ vi.stubGlobal('localStorage', {
 import {
   activePlaylist,
   challenge,
+  cooldownPlaylist,
   generateVerifier,
   parsePlaylistInput,
   saveActiveId,
@@ -88,6 +89,28 @@ describe('activePlaylist', () => {
   it('returns null when no playlists exist', () => {
     saveActiveId('a');
     expect(activePlaylist()).toBeNull();
+  });
+});
+
+describe('cooldownPlaylist', () => {
+  beforeEach(() => store.clear());
+
+  it('returns the playlist matching the stored cooldown id', () => {
+    const pl = { id: 'c1', name: 'Chill', uri: 'spotify:playlist:ccc' };
+    store.set('tasha.spotify.playlists', JSON.stringify([pl]));
+    store.set('tasha.spotify.cooldown', 'c1');
+    expect(cooldownPlaylist()).toEqual(pl);
+  });
+
+  it('returns null when unset (no first-playlist fallback, unlike activePlaylist)', () => {
+    store.set('tasha.spotify.playlists', JSON.stringify([{ id: 'c1', name: 'Chill', uri: 'spotify:playlist:ccc' }]));
+    expect(cooldownPlaylist()).toBeNull();
+  });
+
+  it('returns null when the stored id does not resolve', () => {
+    store.set('tasha.spotify.playlists', JSON.stringify([{ id: 'c1', name: 'Chill', uri: 'spotify:playlist:ccc' }]));
+    store.set('tasha.spotify.cooldown', 'gone');
+    expect(cooldownPlaylist()).toBeNull();
   });
 });
 

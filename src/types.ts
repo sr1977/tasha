@@ -1,11 +1,20 @@
 export type Category = 'upper' | 'lower' | 'core' | 'cardio';
 export type Equipment = 'bodyweight' | 'dumbbells';
 
+export type Pref = 'fav' | 'ban';
+
 export interface Exercise {
   id: string;
   name: string;
   category: Category;
   equipment: Equipment;
+  pref?: Pref;
+  cue?: string;
+}
+
+export interface PartnerConfig {
+  on: boolean;
+  names: [string, string];
 }
 
 export interface Settings {
@@ -14,6 +23,7 @@ export interface Settings {
   stations: number;
   roundRestSecs: number;
   totalMins: number;
+  partner?: PartnerConfig;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

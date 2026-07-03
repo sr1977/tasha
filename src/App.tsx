@@ -34,10 +34,24 @@ export default function App() {
     setSession(null); // settings changed -> stale session invalidated
   };
 
+  const banExercise = (banned: Exercise) => {
+    const next = pool.map((e) => (e.id === banned.id ? { ...e, pref: 'ban' as const } : e));
+    setPoolState(next);
+    savePool(next); // deliberately NOT setPool: the running session must survive
+  };
+
   if (!callbackDone) return null; // exchanging the Spotify auth code
 
   if (screen === 'workout' && session) {
-    return <Workout session={session} onExit={() => setScreen('setup')} />;
+    return (
+      <Workout
+        session={session}
+        pool={pool}
+        onBan={banExercise}
+        partner={settings.partner}
+        onExit={() => setScreen('setup')}
+      />
+    );
   }
 
   return (

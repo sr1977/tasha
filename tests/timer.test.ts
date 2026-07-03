@@ -105,4 +105,14 @@ describe('timer', () => {
     expect(timerReducer(done, { type: 'prev' })).toEqual(done);
     expect(tick(done, 1000)).toEqual(done);
   });
+
+  it('replace swaps the session but keeps position and status', () => {
+    const mid: TimerState = { session, index: 1, remainingMs: 2500, status: 'paused' };
+    const swapped: Session = [...session];
+    const s = timerReducer(mid, { type: 'replace', session: swapped });
+    expect(s.session).toBe(swapped);
+    expect(s.index).toBe(1);
+    expect(s.remainingMs).toBe(2500);
+    expect(s.status).toBe('paused');
+  });
 });

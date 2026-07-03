@@ -24,10 +24,16 @@ export function pickStations(
   rand: () => number = Math.random,
 ): Exercise[] {
   if (pool.length === 0) throw new Error('empty pool');
+  const allowed = pool.filter((e) => e.pref !== 'ban');
+  // ponytail: everything banned -> ignore bans rather than fail generation
+  const usable = allowed.length > 0 ? allowed : pool;
   const byCat = new Map<Category, Exercise[]>();
   for (const cat of CATEGORY_ORDER) {
-    const items = shuffle(pool.filter((e) => e.category === cat), rand);
-    if (items.length > 0) byCat.set(cat, items);
+    const items = usable.filter((e) => e.category === cat);
+    // favourites get a double entry => ~2x pick odds
+    const weighted = items.flatMap((e) => (e.pref === 'fav' ? [e, e] : [e]));
+    const shuffled = shuffle(weighted, rand);
+    if (shuffled.length > 0) byCat.set(cat, shuffled);
   }
   const cats = [...byCat.keys()];
   const nextIdx = new Map<Category, number>(cats.map((c) => [c, 0]));
@@ -83,4 +89,43 @@ export function generateSession(
 
 export function sessionDuration(session: Session): number {
   return session.reduce((total, i) => total + i.duration, 0);
+}
+
+export function replaceInSession(
+  session: Session,
+  fromIndex: number,
+  bannedId: string,
+  replacement: Exercise,
+): Session {
+  return session.map((iv, i) =>
+    i > fromIndex && iv.exercise?.id === bannedId ? { ...iv, exercise: replacement } : iv,
+  );
+}
+
+export function banReplacement(
+  pool: Exercise[],
+  stations: Exercise[],
+  banned: Exercise,
+  rand: () => number = Math.random,
+): Exercise | null {
+  const stationIds = new Set(stations.map((s) => s.id));
+  const ok = (e: Exercise) => e.pref !== 'ban' && e.id !== banned.id && !stationIds.has(e.id);
+  const sameCat = pool.filter((e) => ok(e) && e.category === banned.category);
+  const candidates = sameCat.length > 0 ? sameCat : pool.filter(ok);
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(rand() * candidates.length)];
+}
+
+export function partnerExercises(stations: Exercise[], station: number): [Exercise, Exercise] {
+  return [stations[station - 1], stations[station % stations.length]];
+}
+
+// Latest exercise seen per station — later rounds reflect mid-session
+// replacements (bans), so last write wins.
+export function stationTemplate(session: Session): Exercise[] {
+  const stations: Exercise[] = [];
+  for (const iv of session) {
+    if (iv.kind === 'work' && iv.exercise) stations[iv.station - 1] = iv.exercise;
+  }
+  return stations;
 }

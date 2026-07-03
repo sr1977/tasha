@@ -5,6 +5,10 @@ import {
   pickStations,
   roundCount,
   sessionDuration,
+  replaceInSession,
+  banReplacement,
+  partnerExercises,
+  stationTemplate,
   PREP_SECS,
 } from '../src/generator';
 import { DEFAULT_SETTINGS, type Category, type Exercise, type Settings } from '../src/types';
@@ -100,5 +104,106 @@ describe('generateSession', () => {
     const session = generateSession(pool, small);
     expect(session[0].kind).toBe('prep');
     expect(session.filter((i) => i.kind === 'work')).toHaveLength(4);
+  });
+});
+
+const exp = (id: string, category: Category, pref?: Exercise['pref']): Exercise => ({
+  id,
+  name: id,
+  category,
+  equipment: 'bodyweight',
+  pref,
+});
+
+describe('preferences', () => {
+  it('never picks banned exercises', () => {
+    const p = [exp('u1', 'upper'), exp('u2', 'upper', 'ban'), exp('l1', 'lower')];
+    for (let i = 0; i < 20; i++) {
+      expect(pickStations(p, 3).some((e) => e.id === 'u2')).toBe(false);
+    }
+  });
+
+  it('ignores bans when everything is banned', () => {
+    const p = [exp('u1', 'upper', 'ban'), exp('l1', 'lower', 'ban')];
+    expect(pickStations(p, 2)).toHaveLength(2);
+  });
+
+  it('weights favourites about 2x', () => {
+    const p = [exp('u1', 'upper', 'fav'), exp('u2', 'upper'), exp('u3', 'upper')];
+    let favFirst = 0;
+    for (let i = 0; i < 400; i++) {
+      if (pickStations(p, 1)[0].id === 'u1') favFirst++;
+    }
+    // fav has 2 of 4 shuffle entries => ~50% (mean 200); unweighted would be ~33% (mean 133).
+    // 165 sits >3 sigma from both distributions: reliably passes when weighting
+    // works, reliably fails when it doesn't.
+    expect(favFirst).toBeGreaterThan(165);
+  });
+});
+
+describe('replaceInSession', () => {
+  const a = exp('a', 'upper');
+  const b = exp('b', 'lower');
+  const z = exp('z', 'upper');
+  const session = buildSession([a, b], { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 });
+  // kinds: prep, work(a), rest(->b), work(b), roundRest(->a), work(a), rest(->b), work(b)
+
+  it('swaps only intervals after fromIndex', () => {
+    const out = replaceInSession(session, 1, 'a', z);
+    expect(out[1].exercise!.id).toBe('a'); // current interval untouched
+    expect(out[4].exercise!.id).toBe('z'); // roundRest preview swapped
+    expect(out[5].exercise!.id).toBe('z'); // later work swapped
+  });
+
+  it('leaves other exercises alone', () => {
+    const out = replaceInSession(session, 1, 'a', z);
+    expect(out[3].exercise!.id).toBe('b');
+    expect(out[6].exercise!.id).toBe('b');
+  });
+});
+
+describe('banReplacement', () => {
+  const stations = [exp('u1', 'upper'), exp('l1', 'lower')];
+  it('prefers same category, excluding stations and banned', () => {
+    const pool = [...stations, exp('u2', 'upper'), exp('u3', 'upper', 'ban'), exp('c1', 'core')];
+    expect(banReplacement(pool, stations, stations[0], () => 0)!.id).toBe('u2');
+  });
+  it('falls back to any unused non-banned exercise', () => {
+    const pool = [...stations, exp('c1', 'core')];
+    expect(banReplacement(pool, stations, stations[0], () => 0)!.id).toBe('c1');
+  });
+  it('returns null when no candidate exists', () => {
+    expect(banReplacement([...stations], stations, stations[0])).toBeNull();
+  });
+  it('never returns a banned exercise even as same-category fallback', () => {
+    const stations = [exp('u1', 'upper')];
+    const pool = [...stations, exp('u2', 'upper', 'ban'), exp('c1', 'core', 'ban')];
+    expect(banReplacement(pool, stations, stations[0])).toBeNull();
+  });
+});
+
+describe('stationTemplate', () => {
+  const a = exp('a', 'upper');
+  const b = exp('b', 'lower');
+  const z = exp('z', 'upper');
+
+  it('returns the stations in order', () => {
+    expect(stationTemplate(buildSession([a, b], small)).map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
+  it('reflects mid-session replacements (last write wins)', () => {
+    const out = replaceInSession(buildSession([a, b], small), 1, 'a', z);
+    expect(stationTemplate(out).map((e) => e.id)).toEqual(['z', 'b']);
+  });
+});
+
+describe('partnerExercises', () => {
+  const stations = [exp('s1', 'upper'), exp('s2', 'lower'), exp('s3', 'core')];
+  it('offsets partner 2 by one station', () => {
+    expect(partnerExercises(stations, 1).map((e) => e.id)).toEqual(['s1', 's2']);
+    expect(partnerExercises(stations, 2).map((e) => e.id)).toEqual(['s2', 's3']);
+  });
+  it('wraps partner 2 to station 1 on the last station', () => {
+    expect(partnerExercises(stations, 3).map((e) => e.id)).toEqual(['s3', 's1']);
   });
 });
