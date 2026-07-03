@@ -3,6 +3,7 @@ import type { Exercise, Session, Settings } from './types';
 import { loadPool, loadSettings, savePool, saveSettings } from './storage';
 import { initAudio } from './audio';
 import { handleCallback } from './spotify';
+import { Logo } from './components/Logo';
 import { Pool } from './components/Pool';
 import { Setup } from './components/Setup';
 import { Workout } from './components/Workout';
@@ -56,6 +57,13 @@ export default function App() {
 
   return (
     <div className="app">
+      <header className="brand">
+        <Logo size={40} />
+        <div>
+          <div className="brand-name">Tasha</div>
+          <div className="brand-tag">Train. Attack. Sweat. Hold. Again.</div>
+        </div>
+      </header>
       <nav>
         <button onClick={() => setScreen('setup')} disabled={screen === 'setup'}>Session</button>
         <button onClick={() => setScreen('pool')} disabled={screen === 'pool'}>Exercises</button>
