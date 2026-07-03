@@ -5,10 +5,12 @@ import {
   disconnect,
   isConnected,
   loadActiveId,
+  loadCooldownId,
   loadPlaylists,
   parsePlaylistInput,
   playerError,
   saveActiveId,
+  saveCooldownId,
   savePlaylists,
   type SpotifyPlaylist,
 } from '../spotify';
@@ -17,6 +19,7 @@ export function Music() {
   const [connected, setConnected] = useState(isConnected);
   const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>(loadPlaylists);
   const [activeId, setActiveId] = useState<string | null>(loadActiveId);
+  const [cooldownId, setCooldownId] = useState<string | null>(loadCooldownId);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +63,10 @@ export function Music() {
         clearActiveId();
       }
     }
+    if (id === cooldownId) {
+      setCooldownId(null);
+      saveCooldownId('');
+    }
   };
 
   if (!connected) {
@@ -85,6 +92,23 @@ export function Music() {
             value={activeId ?? playlists[0]?.id ?? ''}
             onChange={(e) => setActive(e.target.value)}
           >
+            {playlists.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {playlists.length > 0 && (
+        <label>
+          Cool-down when finished (optional)
+          <select
+            value={cooldownId ?? ''}
+            onChange={(e) => {
+              setCooldownId(e.target.value || null);
+              saveCooldownId(e.target.value);
+            }}
+          >
+            <option value="">None</option>
             {playlists.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

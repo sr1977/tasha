@@ -4,7 +4,7 @@ import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
 import { banReplacement, replaceInSession, sessionDuration } from '../generator';
 import { fmt } from './Setup';
-import { activePlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
+import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
 
 function announce(state: TimerState): void {
@@ -86,12 +86,24 @@ export function Workout({
     };
   }, []);
 
-  // Music follows the timer: paused/done -> pause, running -> resume.
+  // Music follows the timer: running -> resume, paused -> pause,
+  // done -> cool-down playlist if configured, else pause.
   useEffect(() => {
     const p = playerRef.current;
     if (!p) return;
-    if (state.status === 'running') p.resume();
-    else p.pause();
+    if (state.status === 'running') {
+      p.resume();
+    } else if (state.status === 'done') {
+      const cd = cooldownPlaylist();
+      if (cd) {
+        p.setBaseVolume(DIP_VOLUME);
+        void p.play(cd.uri).catch(() => {});
+      } else {
+        p.pause();
+      }
+    } else {
+      p.pause();
+    }
   }, [state.status]);
 
   // Interval-aware volume: full during work, dipped otherwise.
