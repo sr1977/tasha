@@ -210,13 +210,19 @@ export function Workout({
       transitionTone();
       announce(state, partner);
       playerRef.current?.duck();
-      if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
+      if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
+        beep();
+        playerRef.current?.duck(0, 1300); // beeps get full mute
+      }
       return;
     }
     if (secsLeft !== prevSecs.current) {
       const prev = prevSecs.current;
       prevSecs.current = secsLeft;
-      if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
+      if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
+        beep();
+        playerRef.current?.duck(0, 1300); // beeps get full mute
+      }
       const cur = state.session[state.index];
       const half = Math.ceil(cur.duration / 2);
       if (
