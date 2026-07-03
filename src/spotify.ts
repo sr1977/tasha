@@ -105,7 +105,14 @@ async function tokenRequest(body: Record<string, string>): Promise<StoredAuth | 
   }
 }
 
-export async function handleCallback(): Promise<boolean> {
+let callbackResult: Promise<boolean> | null = null;
+
+export function handleCallback(): Promise<boolean> {
+  callbackResult ??= exchangeCallback();
+  return callbackResult;
+}
+
+async function exchangeCallback(): Promise<boolean> {
   const code = new URLSearchParams(window.location.search).get('code');
   if (!code) return false;
   const verifier = sessionStorage.getItem(VERIFIER_KEY) ?? '';
@@ -154,6 +161,10 @@ export function loadActiveId(): string | null {
 
 export function saveActiveId(id: string): void {
   localStorage.setItem(ACTIVE_KEY, id);
+}
+
+export function clearActiveId(): void {
+  localStorage.removeItem(ACTIVE_KEY);
 }
 
 export function activePlaylist(): SpotifyPlaylist | null {

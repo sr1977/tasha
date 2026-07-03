@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  clearActiveId,
   connect,
   disconnect,
   isConnected,
@@ -51,7 +52,14 @@ export function Music() {
   const remove = (id: string) => {
     const next = playlists.filter((p) => p.id !== id);
     update(next);
-    if (id === activeId && next.length > 0) setActive(next[0].id);
+    if (id === activeId) {
+      if (next.length > 0) {
+        setActive(next[0].id);
+      } else {
+        setActiveId(null);
+        clearActiveId();
+      }
+    }
   };
 
   if (!connected) {
