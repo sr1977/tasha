@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Exercise, Session, Settings } from '../types';
 import { buildSession, generateSession, roundCount, sessionDuration } from '../generator';
+import { Music } from './Music';
 
 export const fmt = (secs: number) =>
   `${Math.floor(secs / 60)}:${String(Math.round(secs) % 60).padStart(2, '0')}`;
@@ -61,47 +62,50 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
   );
 
   return (
-    <section>
-      <h2>Session</h2>
-      <div className="settings-grid">
-        {num('workSecs', 'Work (seconds)', 5)}
-        {num('restSecs', 'Rest (seconds)', 0)}
-        {num('stations', 'Stations', 1)}
-        {num('roundRestSecs', 'Round rest (seconds)', 0)}
-        {num('totalMins', 'Target length (minutes)', 5)}
-      </div>
-      {pool.length === 0 ? (
-        <p className="warn">
-          Your exercise pool is empty. <button onClick={goToPool}>Add exercises</button>
-        </p>
-      ) : (
-        <>
-          {pool.length < settings.stations && (
-            <p className="warn">
-              Only {pool.length} exercises for {settings.stations} stations — some will repeat.
-            </p>
-          )}
-          <button onClick={() => setSession(generateSession(pool, settings))}>
-            {session ? 'Regenerate' : 'Generate session'}
-          </button>
-        </>
-      )}
-      {session && stations && (
-        <>
-          <p>
-            {roundCount(settings)} rounds · actual duration {fmt(sessionDuration(session))}
+    <>
+      <section>
+        <h2>Session</h2>
+        <div className="settings-grid">
+          {num('workSecs', 'Work (seconds)', 5)}
+          {num('restSecs', 'Rest (seconds)', 0)}
+          {num('stations', 'Stations', 1)}
+          {num('roundRestSecs', 'Round rest (seconds)', 0)}
+          {num('totalMins', 'Target length (minutes)', 5)}
+        </div>
+        {pool.length === 0 ? (
+          <p className="warn">
+            Your exercise pool is empty. <button onClick={goToPool}>Add exercises</button>
           </p>
-          <ol className="stations">
-            {stations.map((s, i) => (
-              <li key={`${s.id}-${i}`}>
-                {s.name} <small>({s.category})</small>{' '}
-                <button onClick={() => swap(i)} title="Swap this station">↻</button>
-              </li>
-            ))}
-          </ol>
-          <button className="start" onClick={onStart}>Start workout ▶</button>
-        </>
-      )}
-    </section>
+        ) : (
+          <>
+            {pool.length < settings.stations && (
+              <p className="warn">
+                Only {pool.length} exercises for {settings.stations} stations — some will repeat.
+              </p>
+            )}
+            <button onClick={() => setSession(generateSession(pool, settings))}>
+              {session ? 'Regenerate' : 'Generate session'}
+            </button>
+          </>
+        )}
+        {session && stations && (
+          <>
+            <p>
+              {roundCount(settings)} rounds · actual duration {fmt(sessionDuration(session))}
+            </p>
+            <ol className="stations">
+              {stations.map((s, i) => (
+                <li key={`${s.id}-${i}`}>
+                  {s.name} <small>({s.category})</small>{' '}
+                  <button onClick={() => swap(i)} title="Swap this station">↻</button>
+                </li>
+              ))}
+            </ol>
+            <button className="start" onClick={onStart}>Start workout ▶</button>
+          </>
+        )}
+      </section>
+      <Music />
+    </>
   );
 }

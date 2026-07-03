@@ -85,3 +85,14 @@ input, select {
 .workout .controls button { font-size: 2rem; padding: 0.6rem 1.6rem; background: rgba(0, 0, 0, 0.3); }
 .workout .exit { position: absolute; top: 1rem; right: 1rem; background: rgba(0, 0, 0, 0.3); }
 progress { width: min(80vw, 600px); height: 8px; }
+
+/* ---- music ---- */
+.music { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #333; }
+.music label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: #aaa; margin: 0.75rem 0; max-width: 20rem; }
+.music .playlist-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; margin: 0.75rem 0; }
+.music .playlist-list li { display: flex; gap: 0.5rem; align-items: center; }
+.music .hint { color: #888; font-size: 0.85rem; }
+
+/* ---- track display ---- */
+.workout .track { position: absolute; bottom: 1rem; right: 1rem; display: flex; gap: 0.5rem; align-items: center; font-size: 1rem; color: rgba(255, 255, 255, 0.8); max-width: 40vw; }
+.workout .track button { font-size: 1rem; padding: 0.3rem 0.7rem; background: rgba(0, 0, 0, 0.3); }
