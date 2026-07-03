@@ -71,8 +71,10 @@ export function createVoiceControl(
     if (!stopped && !muted) tryStart();
   };
   rec.onerror = (e) => {
+    // 'aborted' = our own self-mute; 'no-speech' = routine silence timeout.
+    if (e.error === 'aborted' || e.error === 'no-speech') return;
     console.warn('[tasha] voice recognition error:', e.error);
-    // ponytail: two strikes (e.g. mic denied) -> voice stays off this workout
+    // ponytail: two real strikes (mic denied etc.) -> voice stays off this workout
     if (++errors >= 2) stopped = true;
   };
 
