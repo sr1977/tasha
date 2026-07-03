@@ -108,3 +108,8 @@ progress { width: min(80vw, 600px); height: 8px; }
 /* ---- voice control ---- */
 .workout .mic { position: absolute; top: 1rem; left: 1rem; background: rgba(0, 0, 0, 0.3); }
 .workout .mic.off { opacity: 0.4; text-decoration: line-through; }
+
+/* ---- partner mode ---- */
+.partner-toggle { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; color: #aaa; }
+.partner-names { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.workout .label.partner { font-size: clamp(1.6rem, 5vw, 3.2rem); display: flex; flex-direction: column; gap: 0.3rem; }

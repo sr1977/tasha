@@ -44,7 +44,13 @@ export default function App() {
 
   if (screen === 'workout' && session) {
     return (
-      <Workout session={session} pool={pool} onBan={banExercise} onExit={() => setScreen('setup')} />
+      <Workout
+        session={session}
+        pool={pool}
+        onBan={banExercise}
+        partner={settings.partner}
+        onExit={() => setScreen('setup')}
+      />
     );
   }
 

@@ -1,14 +1,29 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import type { Exercise, Session } from '../types';
+import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { banReplacement, replaceInSession, sessionDuration } from '../generator';
+import { banReplacement, partnerExercises, replaceInSession, sessionDuration } from '../generator';
 import { fmt } from './Setup';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
 
-function announce(state: TimerState): void {
+function announce(state: TimerState, partner?: PartnerConfig): void {
   const iv = state.session[state.index];
+  if (partner?.on && iv.kind !== 'prep') {
+    const stations = state.session
+      .filter((x) => x.kind === 'work' && x.round === 1)
+      .map((x) => x.exercise!);
+    const [n1, n2] = partner.names;
+    if (iv.kind === 'work') {
+      const [a, b] = partnerExercises(stations, iv.station);
+      speak(`${n1}: ${a.name}. ${n2}: ${b.name}. Go!`);
+    } else {
+      const nextStation = iv.kind === 'rest' ? iv.station + 1 : 1;
+      const [a, b] = partnerExercises(stations, nextStation);
+      speak(`Next — ${n1}: ${a.name}. ${n2}: ${b.name}`);
+    }
+    return;
+  }
   if (iv.kind === 'work') speak(`${iv.exercise!.name}. Go!`);
   else if (iv.kind === 'rest') {
     const cue = iv.exercise!.cue ? ` — ${iv.exercise!.cue}` : '';
@@ -20,11 +35,13 @@ export function Workout({
   session,
   pool,
   onBan,
+  partner,
   onExit,
 }: {
   session: Session;
   pool: Exercise[];
   onBan: (e: Exercise) => void;
+  partner?: PartnerConfig;
   onExit: () => void;
 }) {
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
@@ -192,7 +209,7 @@ export function Workout({
       prevIndex.current = state.index;
       prevSecs.current = secsLeft;
       transitionTone();
-      announce(state);
+      announce(state, partner);
       playerRef.current?.duck();
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
       return;
@@ -217,6 +234,10 @@ export function Workout({
 
   const iv = state.session[state.index];
   const stationsPerRound = Math.max(...session.map((i) => i.station));
+  const partnerOn = partner?.on ?? false;
+  const stations = partnerOn
+    ? state.session.filter((x) => x.kind === 'work' && x.round === 1).map((x) => x.exercise!)
+    : [];
   const totalRounds = session[session.length - 1].round;
   const total = sessionDuration(session);
   const elapsed =
@@ -244,12 +265,38 @@ export function Workout({
         {iv.kind === 'work' && ` · Station ${iv.station}/${stationsPerRound}`}
         {state.status === 'paused' && ' · PAUSED'}
       </div>
-      <div className="label">
-        {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
-      </div>
-      {iv.kind === 'work' && iv.exercise?.cue && <div className="cue">{iv.exercise.cue}</div>}
+      {partnerOn && iv.kind === 'work' ? (
+        <div className="label partner">
+          {partnerExercises(stations, iv.station).map((e, i) => (
+            <div key={i}>
+              {partner!.names[i]}: {e.name}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="label">
+            {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
+          </div>
+          {!partnerOn && iv.kind === 'work' && iv.exercise?.cue && (
+            <div className="cue">{iv.exercise.cue}</div>
+          )}
+        </>
+      )}
       <div className="clock">{secsLeft >= 60 ? fmt(secsLeft) : secsLeft}</div>
-      {iv.kind !== 'work' && iv.exercise && <div className="next">Next: {iv.exercise.name}</div>}
+      {iv.kind !== 'work' &&
+        (partnerOn ? (
+          iv.kind !== 'prep' && (
+            <div className="next">
+              Next —{' '}
+              {partnerExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1)
+                .map((e, i) => `${partner!.names[i]}: ${e.name}`)
+                .join(' · ')}
+            </div>
+          )
+        ) : (
+          iv.exercise && <div className="next">Next: {iv.exercise.name}</div>
+        ))}
       <div className="controls">
         <button onClick={() => dispatch({ type: 'prev' })} title="Back (←)">⏮</button>
         <button

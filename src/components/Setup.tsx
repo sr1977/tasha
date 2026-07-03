@@ -72,6 +72,35 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           {num('roundRestSecs', 'Round rest (seconds)', 0)}
           {num('totalMins', 'Target length (minutes)', 5)}
         </div>
+        <label className="partner-toggle">
+          <input
+            type="checkbox"
+            checked={settings.partner?.on ?? false}
+            onChange={(e) =>
+              setSettings({
+                ...settings,
+                partner: { on: e.target.checked, names: settings.partner?.names ?? ['A', 'B'] },
+              })
+            }
+          />
+          Partner mode — two people, offset stations
+        </label>
+        {settings.partner?.on && (
+          <div className="partner-names">
+            {([0, 1] as const).map((i) => (
+              <input
+                key={i}
+                value={settings.partner!.names[i]}
+                onChange={(e) => {
+                  const names: [string, string] = [...settings.partner!.names];
+                  names[i] = e.target.value;
+                  setSettings({ ...settings, partner: { on: true, names } });
+                }}
+                placeholder={`Partner ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
         {pool.length === 0 ? (
           <p className="warn">
             Your exercise pool is empty. <button onClick={goToPool}>Add exercises</button>
