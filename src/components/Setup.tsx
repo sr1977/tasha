@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Exercise, Session, Settings } from '../types';
-import { buildSession, generateSession, roundCount, sessionDuration } from '../generator';
+import { banReplacement, buildSession, generateSession, roundCount, sessionDuration } from '../generator';
 import { Music } from './Music';
 
 export const fmt = (secs: number) =>
@@ -23,13 +23,10 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
 
   const swap = (i: number) => {
     if (!stations) return;
-    const current = stations[i];
-    const usedIds = new Set(stations.map((s) => s.id));
-    const sameCat = pool.filter((e) => e.category === current.category && !usedIds.has(e.id));
-    const candidates = sameCat.length > 0 ? sameCat : pool.filter((e) => !usedIds.has(e.id));
-    if (candidates.length === 0) return;
+    const replacement = banReplacement(pool, stations, stations[i]);
+    if (!replacement) return;
     const next = [...stations];
-    next[i] = candidates[Math.floor(Math.random() * candidates.length)];
+    next[i] = replacement;
     setSession(buildSession(next, settings));
   };
 

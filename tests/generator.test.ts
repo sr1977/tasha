@@ -175,6 +175,11 @@ describe('banReplacement', () => {
   it('returns null when no candidate exists', () => {
     expect(banReplacement([...stations], stations, stations[0])).toBeNull();
   });
+  it('never returns a banned exercise even as same-category fallback', () => {
+    const stations = [exp('u1', 'upper')];
+    const pool = [...stations, exp('u2', 'upper', 'ban'), exp('c1', 'core', 'ban')];
+    expect(banReplacement(pool, stations, stations[0])).toBeNull();
+  });
 });
 
 describe('stationTemplate', () => {
