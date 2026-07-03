@@ -5,6 +5,7 @@ import { beep, cancelSpeech, speak, transitionTone } from '../audio';
 import { banReplacement, replaceInSession, sessionDuration } from '../generator';
 import { fmt } from './Setup';
 import { activePlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
+import { createVoiceControl, voiceSupported } from '../voice';
 
 function announce(state: TimerState): void {
   const iv = state.session[state.index];
@@ -30,6 +31,7 @@ export function Workout({
 
   const playerRef = useRef<PlayerHandle | null>(null);
   const [track, setTrack] = useState<string | null>(null);
+  const [voiceOn, setVoiceOn] = useState(() => localStorage.getItem('tasha.voice') !== '0');
 
   // Live status/kind refs so the async player-ready callback sees current state.
   const statusRef = useRef(state.status);
@@ -143,6 +145,20 @@ export function Workout({
     return () => window.removeEventListener('keydown', onKey);
   }, [state.status]);
 
+  // Voice control: mic listens only while the workout screen is mounted.
+  useEffect(() => {
+    if (!voiceOn) return;
+    const vc = createVoiceControl((cmd) => {
+      if (cmd === 'pause') dispatch({ type: 'pause' });
+      else if (cmd === 'resume') dispatch({ type: 'resume' });
+      else if (cmd === 'skip') dispatch({ type: 'next' });
+      else if (cmd === 'back') dispatch({ type: 'prev' });
+      else playerRef.current?.skipTrack();
+    });
+    if (!vc) return;
+    return () => vc.stop();
+  }, [voiceOn]);
+
   // Audio cues: transition tone + announcement on interval change,
   // countdown beeps at 3/2/1, completion announcement.
   const secsLeft = Math.ceil(state.remainingMs / 1000);
@@ -198,6 +214,19 @@ export function Workout({
   return (
     <div className={`workout ${iv.kind}${state.status === 'paused' ? ' paused' : ''}`}>
       <button className="exit" onClick={onExit}>Exit</button>
+      {voiceSupported() && (
+        <button
+          className={`mic${voiceOn ? '' : ' off'}`}
+          onClick={() => {
+            const v = !voiceOn;
+            setVoiceOn(v);
+            localStorage.setItem('tasha.voice', v ? '1' : '0');
+          }}
+          title={voiceOn ? 'Voice control on — say pause / go / skip / back / next track' : 'Voice control off'}
+        >
+          🎤
+        </button>
+      )}
       <div className="meta">
         Round {iv.round}/{totalRounds}
         {iv.kind === 'work' && ` · Station ${iv.station}/${stationsPerRound}`}
