@@ -1,19 +1,31 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import type { Session } from '../types';
+import type { Exercise, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { sessionDuration } from '../generator';
+import { banReplacement, replaceInSession, sessionDuration } from '../generator';
 import { fmt } from './Setup';
 import { activePlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 
 function announce(state: TimerState): void {
   const iv = state.session[state.index];
   if (iv.kind === 'work') speak(`${iv.exercise!.name}. Go!`);
-  else if (iv.kind === 'rest') speak(`Rest. Next up: ${iv.exercise!.name}`);
-  else if (iv.kind === 'roundRest') speak(`Round ${iv.round + 1} coming up`);
+  else if (iv.kind === 'rest') {
+    const cue = iv.exercise!.cue ? ` — ${iv.exercise!.cue}` : '';
+    speak(`Rest. Next up: ${iv.exercise!.name}${cue}`);
+  } else if (iv.kind === 'roundRest') speak(`Round ${iv.round + 1} coming up`);
 }
 
-export function Workout({ session, onExit }: { session: Session; onExit: () => void }) {
+export function Workout({
+  session,
+  pool,
+  onBan,
+  onExit,
+}: {
+  session: Session;
+  pool: Exercise[];
+  onBan: (e: Exercise) => void;
+  onExit: () => void;
+}) {
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
 
   const playerRef = useRef<PlayerHandle | null>(null);
@@ -24,6 +36,22 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
   statusRef.current = state.status;
   const kindRef = useRef(state.session[state.index].kind);
   kindRef.current = state.session[state.index].kind;
+
+  const ban = () => {
+    const iv = state.session[state.index];
+    if (iv.kind !== 'work' || !iv.exercise) return;
+    const stations = state.session
+      .filter((x) => x.kind === 'work' && x.round === 1)
+      .map((x) => x.exercise!);
+    const replacement = banReplacement(pool, stations, iv.exercise);
+    onBan(iv.exercise);
+    if (replacement) {
+      dispatch({
+        type: 'replace',
+        session: replaceInSession(state.session, state.index, iv.exercise.id, replacement),
+      });
+    }
+  };
 
   // Music lifecycle: get the shared player + start the active playlist on
   // mount, pause on unmount (the player is a page-lifetime singleton — never
@@ -175,6 +203,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
       <div className="label">
         {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
       </div>
+      {iv.kind === 'work' && iv.exercise?.cue && <div className="cue">{iv.exercise.cue}</div>}
       <div className="clock">{secsLeft >= 60 ? fmt(secsLeft) : secsLeft}</div>
       {iv.kind !== 'work' && iv.exercise && <div className="next">Next: {iv.exercise.name}</div>}
       <div className="controls">
@@ -186,6 +215,9 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
           {state.status === 'paused' ? '▶' : '⏸'}
         </button>
         <button onClick={() => dispatch({ type: 'next' })} title="Skip (→)">⏭</button>
+        {iv.kind === 'work' && (
+          <button onClick={ban} title="Never again — ban this exercise and swap it out">👎</button>
+        )}
       </div>
       <progress value={elapsed} max={total} />
       {track && (

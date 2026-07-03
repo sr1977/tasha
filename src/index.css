@@ -102,3 +102,5 @@ progress { width: min(80vw, 600px); height: 8px; }
 /* ---- track display ---- */
 .workout .track { position: absolute; bottom: 1rem; right: 1rem; display: flex; gap: 0.5rem; align-items: center; font-size: 1rem; color: rgba(255, 255, 255, 0.8); max-width: 40vw; }
 .workout .track button { font-size: 1rem; padding: 0.3rem 0.7rem; background: rgba(0, 0, 0, 0.3); }
+
+.workout .cue { font-size: 1.3rem; color: rgba(255, 255, 255, 0.75); font-style: italic; }
