@@ -1,9 +1,10 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
 import { sessionDuration } from '../generator';
 import { fmt } from './Setup';
+import { activePlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 
 function announce(state: TimerState): void {
   const iv = state.session[state.index];
@@ -14,6 +15,46 @@ function announce(state: TimerState): void {
 
 export function Workout({ session, onExit }: { session: Session; onExit: () => void }) {
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
+
+  const playerRef = useRef<PlayerHandle | null>(null);
+  const [track, setTrack] = useState<string | null>(null);
+
+  // Music lifecycle: create player + start the active playlist on mount,
+  // pause + release on unmount. All failures leave a silent session.
+  useEffect(() => {
+    const pl = activePlaylist();
+    if (!pl) return;
+    let cancelled = false;
+    void createPlayer().then((p) => {
+      if (!p) return;
+      if (cancelled) {
+        p.disconnect();
+        return;
+      }
+      playerRef.current = p;
+      p.onTrack((name, artist) => setTrack(`${name} — ${artist}`));
+      void p.play(pl.uri);
+    });
+    return () => {
+      cancelled = true;
+      playerRef.current?.disconnect();
+      playerRef.current = null;
+    };
+  }, []);
+
+  // Music follows the timer: paused/done -> pause, running -> resume.
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (state.status === 'running') p.resume();
+    else p.pause();
+  }, [state.status]);
+
+  // Interval-aware volume: full during work, dipped otherwise.
+  useEffect(() => {
+    const kind = state.session[state.index].kind;
+    playerRef.current?.setBaseVolume(kind === 'work' ? WORK_VOLUME : DIP_VOLUME);
+  }, [state.index, state.session]);
 
   // Drift-free ticking: measure real elapsed time between ticks.
   useEffect(() => {
@@ -46,7 +87,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
     };
   }, []);
 
-  // Keyboard: space = pause/resume, arrows = skip.
+  // Keyboard: space = pause/resume, arrows = skip, N = skip track.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -54,6 +95,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
         dispatch({ type: state.status === 'paused' ? 'resume' : 'pause' });
       } else if (e.code === 'ArrowRight') dispatch({ type: 'next' });
       else if (e.code === 'ArrowLeft') dispatch({ type: 'prev' });
+      else if (e.code === 'KeyN') playerRef.current?.skipTrack();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -70,6 +112,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
       if (prevStatus.current !== 'done') {
         transitionTone();
         speak('Session complete. Well done!');
+        playerRef.current?.duck();
         prevStatus.current = 'done';
       }
       return;
@@ -80,6 +123,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
       prevSecs.current = secsLeft;
       transitionTone();
       announce(state);
+      playerRef.current?.duck();
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) beep();
       return;
     }
@@ -133,6 +177,12 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
         <button onClick={() => dispatch({ type: 'next' })} title="Skip (→)">⏭</button>
       </div>
       <progress value={elapsed} max={total} />
+      {track && (
+        <div className="track">
+          ♪ {track}
+          <button onClick={() => playerRef.current?.skipTrack()} title="Skip track (N)">⏭♪</button>
+        </div>
+      )}
     </div>
   );
 }

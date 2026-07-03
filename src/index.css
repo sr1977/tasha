@@ -92,3 +92,7 @@ progress { width: min(80vw, 600px); height: 8px; }
 .music .playlist-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; margin: 0.75rem 0; }
 .music .playlist-list li { display: flex; gap: 0.5rem; align-items: center; }
 .music .hint { color: #888; font-size: 0.85rem; }
+
+/* ---- track display ---- */
+.workout .track { position: absolute; bottom: 1rem; right: 1rem; display: flex; gap: 0.5rem; align-items: center; font-size: 1rem; color: rgba(255, 255, 255, 0.8); max-width: 40vw; }
+.workout .track button { font-size: 1rem; padding: 0.3rem 0.7rem; background: rgba(0, 0, 0, 0.3); }
