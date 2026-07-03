@@ -70,6 +70,7 @@ export function isConnected(): boolean {
 export function disconnect(): void {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(ERROR_KEY);
+  destroyPlayer(); // a live player would hold a dead token-refresh callback
 }
 
 export async function connect(): Promise<void> {
@@ -268,9 +269,35 @@ export interface PlayerHandle {
   onTrack(cb: (label: string | null) => void): void;
 }
 
-export async function createPlayer(): Promise<PlayerHandle | null> {
-  if (!(await getAccessToken())) return null;
-  if (!(await loadSdk())) return null;
+let playerPromise: Promise<PlayerHandle | null> | null = null;
+
+// Singleton: two concurrent SDK players in one page (React StrictMode's
+// double-mounted effects) corrupt the device registration — the device
+// reports ready client-side but is never targetable via the Web API.
+// The player lives for the page's lifetime; Workout pauses it on unmount.
+export function createPlayer(): Promise<PlayerHandle | null> {
+  playerPromise ??= buildPlayer().then((p) => {
+    if (!p) playerPromise = null; // failed -> allow a later retry
+    return p;
+  });
+  return playerPromise;
+}
+
+export function destroyPlayer(): void {
+  const p = playerPromise;
+  playerPromise = null;
+  void p?.then((h) => h?.disconnect()).catch(() => {});
+}
+
+async function buildPlayer(): Promise<PlayerHandle | null> {
+  if (!(await getAccessToken())) {
+    console.warn('[tasha] spotify: no valid access token — not connected or refresh failed');
+    return null;
+  }
+  if (!(await loadSdk())) {
+    console.warn('[tasha] spotify: Web Playback SDK failed to load');
+    return null;
+  }
 
   const player = new window.Spotify!.Player({
     name: 'Tasha Workout Timer',
@@ -288,13 +315,20 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
     player.addListener('ready', (data: never) => {
       resolve((data as { device_id: string }).device_id);
     });
-    player.addListener('initialization_error', () => resolve(null));
-    player.addListener('authentication_error', () => resolve(null));
-    player.addListener('account_error', () => {
-      localStorage.setItem(ERROR_KEY, 'Spotify Premium is required for playback.');
+    const fail = (kind: string) => (e: never) => {
+      console.warn(`[tasha] spotify ${kind}:`, (e as { message?: string })?.message);
       resolve(null);
+    };
+    player.addListener('initialization_error', fail('initialization_error'));
+    player.addListener('authentication_error', fail('authentication_error'));
+    player.addListener('account_error', (e: never) => {
+      localStorage.setItem(ERROR_KEY, 'Spotify Premium is required for playback.');
+      fail('account_error')(e);
     });
-    setTimeout(() => resolve(null), 15_000);
+    setTimeout(() => {
+      console.warn('[tasha] spotify: player not ready within 15s');
+      resolve(null);
+    }, 15_000);
   });
 
   player.addListener('player_state_changed', (data: never) => {
@@ -306,7 +340,10 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
     trackCb(t ? `${t.name} — ${t.artists?.map((a) => a.name).join(', ') ?? ''}` : null);
   });
 
-  if (!(await player.connect())) return null;
+  if (!(await player.connect())) {
+    console.warn('[tasha] spotify: player.connect() returned false');
+    return null;
+  }
   const deviceId = await ready;
   if (!deviceId) {
     player.disconnect();
@@ -317,11 +354,36 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
   const api = async (path: string, body?: unknown): Promise<void> => {
     const t = await getAccessToken();
     if (!t) return;
-    await fetch(`https://api.spotify.com/v1${path}`, {
+    const res = await fetch(`https://api.spotify.com/v1${path}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
-    }).catch(() => {});
+    }).catch((e) => {
+      console.warn('[tasha] spotify api fetch failed:', path, e);
+      return null;
+    });
+    if (res && !res.ok) {
+      console.warn('[tasha] spotify api error:', path, res.status, await res.text().catch(() => ''));
+    }
+  };
+
+  // The SDK fires 'ready' before the device is targetable via the Web API —
+  // commands sent in that window are dropped (202) or 404 "Device not found".
+  // Transfer playback to our device until Spotify accepts it (usually 0.5-3s);
+  // transfer needs only the user-modify-playback-state scope we already hold.
+  const waitForDevice = async (): Promise<void> => {
+    for (let i = 0; i < 10; i++) {
+      const t = await getAccessToken();
+      if (!t) return;
+      const res = await fetch('https://api.spotify.com/v1/me/player', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_ids: [deviceId], play: false }),
+      }).catch(() => null);
+      if (res?.ok) return; // device is live and now the active player
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    console.warn('[tasha] spotify: device transfer never succeeded; trying to play anyway');
   };
 
   const applyBase = () => {
@@ -330,6 +392,7 @@ export async function createPlayer(): Promise<PlayerHandle | null> {
 
   return {
     async play(playlistUri) {
+      await waitForDevice();
       await api(`/me/player/play?device_id=${deviceId}`, { context_uri: playlistUri });
       // ponytail: shuffle after play — shuffle-before-play fails with no active
       // playback, so the first track is unshuffled; acceptable.
