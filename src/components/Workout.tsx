@@ -25,19 +25,16 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
   const kindRef = useRef(state.session[state.index].kind);
   kindRef.current = state.session[state.index].kind;
 
-  // Music lifecycle: create player + start the active playlist on mount,
-  // pause + release on unmount. All failures leave a silent session.
+  // Music lifecycle: get the shared player + start the active playlist on
+  // mount, pause on unmount (the player is a page-lifetime singleton — never
+  // disconnect it here). All failures leave a silent session.
   useEffect(() => {
     const pl = activePlaylist();
     if (!pl) return;
     let cancelled = false;
     void createPlayer()
       .then((p) => {
-        if (!p) return;
-        if (cancelled) {
-          p.disconnect();
-          return;
-        }
+        if (!p || cancelled) return;
         playerRef.current = p;
         p.onTrack((label) => setTrack(label));
         p.setBaseVolume(kindRef.current === 'work' ? WORK_VOLUME : DIP_VOLUME);
@@ -51,7 +48,7 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
       .catch(() => {});
     return () => {
       cancelled = true;
-      playerRef.current?.disconnect();
+      playerRef.current?.pause();
       playerRef.current = null;
     };
   }, []);
