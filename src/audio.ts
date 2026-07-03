@@ -48,15 +48,24 @@ export function speak(text: string): void {
     const u = new SpeechSynthesisUtterance(text);
     const voice = pickVoice(listVoices(), getVoiceName());
     if (voice) u.voice = voice;
+    // Chrome (especially with Google network voices) sometimes never fires
+    // end/error for an utterance. Without a failsafe the speaking=true latch
+    // would mute voice recognition permanently.
+    const failsafe = setTimeout(
+      () => {
+        if (gen === utteranceGen) speechListener?.(false);
+      },
+      Math.min(10_000, 1000 + text.length * 90),
+    );
+    const release = () => {
+      clearTimeout(failsafe);
+      if (gen === utteranceGen) speechListener?.(false);
+    };
     u.onstart = () => {
       if (gen === utteranceGen) speechListener?.(true);
     };
-    u.onend = () => {
-      if (gen === utteranceGen) speechListener?.(false);
-    };
-    u.onerror = () => {
-      if (gen === utteranceGen) speechListener?.(false);
-    };
+    u.onend = release;
+    u.onerror = release;
     window.speechSynthesis.speak(u);
   } catch {
     // voice unavailable -> beeps only
