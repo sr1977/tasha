@@ -105,8 +105,10 @@ POSTs to `https://accounts.spotify.com/api/token` (no secret; PKCE). Refresh
 happens lazily inside `getAccessToken()` when within 60s of expiry.
 
 Starting playback: `PUT https://api.spotify.com/v1/me/player/play?device_id=<sdk device>`
-with `{ context_uri: playlistUri }`, preceded by
-`PUT /v1/me/player/shuffle?state=true&device_id=...`. Skip/pause/resume/volume
+with `{ context_uri: playlistUri }`, followed by
+`PUT /v1/me/player/shuffle?state=true&device_id=...` (shuffle before playback
+starts fails with "no active device", so the first track plays unshuffled —
+accepted). Skip/pause/resume/volume
 use the SDK's local methods (`nextTrack`, `pause`, `resume`, `setVolume`) —
 no extra API calls.
 
