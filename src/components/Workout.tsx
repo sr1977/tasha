@@ -19,22 +19,36 @@ export function Workout({ session, onExit }: { session: Session; onExit: () => v
   const playerRef = useRef<PlayerHandle | null>(null);
   const [track, setTrack] = useState<string | null>(null);
 
+  // Live status/kind refs so the async player-ready callback sees current state.
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+  const kindRef = useRef(state.session[state.index].kind);
+  kindRef.current = state.session[state.index].kind;
+
   // Music lifecycle: create player + start the active playlist on mount,
   // pause + release on unmount. All failures leave a silent session.
   useEffect(() => {
     const pl = activePlaylist();
     if (!pl) return;
     let cancelled = false;
-    void createPlayer().then((p) => {
-      if (!p) return;
-      if (cancelled) {
-        p.disconnect();
-        return;
-      }
-      playerRef.current = p;
-      p.onTrack((name, artist) => setTrack(`${name} — ${artist}`));
-      void p.play(pl.uri);
-    });
+    void createPlayer()
+      .then((p) => {
+        if (!p) return;
+        if (cancelled) {
+          p.disconnect();
+          return;
+        }
+        playerRef.current = p;
+        p.onTrack((name, artist) => setTrack(`${name} — ${artist}`));
+        p.setBaseVolume(kindRef.current === 'work' ? WORK_VOLUME : DIP_VOLUME);
+        void p
+          .play(pl.uri)
+          .then(() => {
+            if (statusRef.current !== 'running') p.pause();
+          })
+          .catch(() => {});
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
       playerRef.current?.disconnect();
