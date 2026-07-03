@@ -8,6 +8,7 @@ import {
   replaceInSession,
   banReplacement,
   partnerExercises,
+  stationTemplate,
   PREP_SECS,
 } from '../src/generator';
 import { DEFAULT_SETTINGS, type Category, type Exercise, type Settings } from '../src/types';
@@ -173,6 +174,21 @@ describe('banReplacement', () => {
   });
   it('returns null when no candidate exists', () => {
     expect(banReplacement([...stations], stations, stations[0])).toBeNull();
+  });
+});
+
+describe('stationTemplate', () => {
+  const a = exp('a', 'upper');
+  const b = exp('b', 'lower');
+  const z = exp('z', 'upper');
+
+  it('returns the stations in order', () => {
+    expect(stationTemplate(buildSession([a, b], small)).map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
+  it('reflects mid-session replacements (last write wins)', () => {
+    const out = replaceInSession(buildSession([a, b], small), 1, 'a', z);
+    expect(stationTemplate(out).map((e) => e.id)).toEqual(['z', 'b']);
   });
 });
 

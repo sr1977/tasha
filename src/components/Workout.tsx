@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { banReplacement, partnerExercises, replaceInSession, sessionDuration } from '../generator';
+import { banReplacement, partnerExercises, replaceInSession, sessionDuration, stationTemplate } from '../generator';
 import { fmt } from './Setup';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
@@ -10,9 +10,7 @@ import { createVoiceControl, voiceSupported } from '../voice';
 function announce(state: TimerState, partner?: PartnerConfig): void {
   const iv = state.session[state.index];
   if (partner?.on && iv.kind !== 'prep') {
-    const stations = state.session
-      .filter((x) => x.kind === 'work' && x.round === 1)
-      .map((x) => x.exercise!);
+    const stations = stationTemplate(state.session);
     const [n1, n2] = partner.names;
     if (iv.kind === 'work') {
       const [a, b] = partnerExercises(stations, iv.station);
@@ -235,9 +233,7 @@ export function Workout({
   const iv = state.session[state.index];
   const stationsPerRound = Math.max(...session.map((i) => i.station));
   const partnerOn = partner?.on ?? false;
-  const stations = partnerOn
-    ? state.session.filter((x) => x.kind === 'work' && x.round === 1).map((x) => x.exercise!)
-    : [];
+  const stations = partnerOn ? stationTemplate(state.session) : [];
   const totalRounds = session[session.length - 1].round;
   const total = sessionDuration(session);
   const elapsed =

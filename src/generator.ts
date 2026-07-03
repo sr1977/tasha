@@ -119,3 +119,13 @@ export function banReplacement(
 export function partnerExercises(stations: Exercise[], station: number): [Exercise, Exercise] {
   return [stations[station - 1], stations[station % stations.length]];
 }
+
+// Latest exercise seen per station — later rounds reflect mid-session
+// replacements (bans), so last write wins.
+export function stationTemplate(session: Session): Exercise[] {
+  const stations: Exercise[] = [];
+  for (const iv of session) {
+    if (iv.kind === 'work' && iv.exercise) stations[iv.station - 1] = iv.exercise;
+  }
+  return stations;
+}
