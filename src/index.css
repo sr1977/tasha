@@ -469,3 +469,20 @@ progress::-moz-progress-bar {
     transition: none !important;
   }
 }
+
+.voice-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  margin: var(--space-md) 0;
+}
+.voice-row label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}

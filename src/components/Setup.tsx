@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Exercise, Session, Settings } from '../types';
 import { banReplacement, buildSession, generateSession, roundCount, sessionDuration } from '../generator';
+import { getVoiceName, listVoices, setVoiceName, speak } from '../audio';
 import { Music } from './Music';
 
 export const fmt = (secs: number) =>
@@ -18,6 +19,14 @@ interface Props {
 
 export function Setup({ pool, settings, setSettings, session, setSession, onStart, goToPool }: Props) {
   const [drafts, setDrafts] = useState<Partial<Record<keyof Settings, string>>>({});
+  const [voices, setVoices] = useState(listVoices);
+  const [voiceName, setVoiceNameState] = useState<string>(() => getVoiceName() ?? '');
+  useEffect(() => {
+    const refresh = () => setVoices(listVoices());
+    refresh(); // voices often load async after first paint
+    window.speechSynthesis?.addEventListener?.('voiceschanged', refresh);
+    return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', refresh);
+  }, []);
   const stations =
     session?.filter((iv) => iv.kind === 'work' && iv.round === 1).map((iv) => iv.exercise!) ?? null;
 
@@ -96,6 +105,28 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                 placeholder={`Partner ${i + 1}`}
               />
             ))}
+          </div>
+        )}
+        {voices.length > 0 && (
+          <div className="voice-row">
+            <label>
+              Coach voice
+              <select
+                value={voiceName}
+                onChange={(e) => {
+                  setVoiceNameState(e.target.value);
+                  setVoiceName(e.target.value);
+                }}
+              >
+                <option value="">Default (auto)</option>
+                {voices.map((v) => (
+                  <option key={v.name} value={v.name}>{v.name}</option>
+                ))}
+              </select>
+            </label>
+            <button onClick={() => speak('Next up: squats — drive through the heels')} title="Test the voice">
+              ▶ Test
+            </button>
           </div>
         )}
         {pool.length === 0 ? (
