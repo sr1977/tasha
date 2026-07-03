@@ -54,6 +54,12 @@ input, select {
 .pool-list li { display: flex; gap: 0.5rem; align-items: center; }
 .pool-list input { flex: 1; }
 
+/* ---- preferences & cues ---- */
+.pool-list .pref { min-width: 2.4rem; }
+.pool-list .pref.fav { color: #f0b429; }
+.pool-list .pref.ban { filter: none; }
+.pool-list .cue-input { flex: 1; font-size: 0.85rem; color: #aaa; }
+
 /* ---- workout ---- */
 .workout {
   position: fixed;

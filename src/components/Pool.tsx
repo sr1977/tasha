@@ -26,6 +26,9 @@ export function Pool({ pool, setPool }: { pool: Exercise[]; setPool: (p: Exercis
       (eqFilter === 'all' || e.equipment === eqFilter),
   );
 
+  const cyclePref = (e: Exercise) =>
+    update(e.id, { pref: e.pref === undefined ? 'fav' : e.pref === 'fav' ? 'ban' : undefined });
+
   return (
     <section>
       <h2>Exercise pool ({pool.length})</h2>
@@ -71,6 +74,25 @@ export function Pool({ pool, setPool }: { pool: Exercise[]; setPool: (p: Exercis
             >
               {EQUIPMENT.map((q) => <option key={q}>{q}</option>)}
             </select>
+            <button
+              className={`pref ${e.pref ?? 'none'}`}
+              onClick={() => cyclePref(e)}
+              title={
+                e.pref === 'fav'
+                  ? 'Favourite (picked more often) — click for ban'
+                  : e.pref === 'ban'
+                    ? 'Banned (never picked) — click to clear'
+                    : 'Neutral — click to favourite'
+              }
+            >
+              {e.pref === 'fav' ? '★' : e.pref === 'ban' ? '🚫' : '–'}
+            </button>
+            <input
+              className="cue-input"
+              value={e.cue ?? ''}
+              onChange={(ev) => update(e.id, { cue: ev.target.value || undefined })}
+              placeholder="Form cue"
+            />
             <button onClick={() => setPool(pool.filter((x) => x.id !== e.id))} title="Delete">✕</button>
           </li>
         ))}
