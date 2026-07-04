@@ -116,8 +116,13 @@ export function banReplacement(
   return candidates[Math.floor(rand() * candidates.length)];
 }
 
+export function groupExercises(stations: Exercise[], station: number, count: number): Exercise[] {
+  return Array.from({ length: count }, (_, g) => stations[(station - 1 + g) % stations.length]);
+}
+
+// ponytail: transitional wrapper, deleted in the next task once consumers move
 export function partnerExercises(stations: Exercise[], station: number): [Exercise, Exercise] {
-  return [stations[station - 1], stations[station % stations.length]];
+  return groupExercises(stations, station, 2) as [Exercise, Exercise];
 }
 
 // Latest exercise seen per station — later rounds reflect mid-session

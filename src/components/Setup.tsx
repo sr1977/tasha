@@ -98,7 +98,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                 key={i}
                 value={settings.partner!.names[i]}
                 onChange={(e) => {
-                  const names: [string, string] = [...settings.partner!.names];
+                  const names: string[] = [...settings.partner!.names];
                   names[i] = e.target.value;
                   setSettings({ ...settings, partner: { on: true, names } });
                 }}
