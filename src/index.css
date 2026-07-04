@@ -385,6 +385,8 @@ select {
   font-weight: 500;
   letter-spacing: 0.02em;
   color: oklch(1 0 0 / 0.85);
+  max-width: 92vw; /* 4-group previews wrap instead of overflowing */
+  text-wrap: balance;
 }
 .workout .controls {
   display: flex;
