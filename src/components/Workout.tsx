@@ -17,16 +17,14 @@ function announce(state: TimerState, partner?: PartnerConfig): void {
       else speak(`Round ${iv.round + 1} coming up`);
       return;
     }
+    // 1-2 groups: named roll call (for count 2 this emits the exact
+    // pre-group-mode strings)
     const stations = stationTemplate(state.session);
-    const [n1, n2] = partner.names;
-    if (iv.kind === 'work') {
-      const [a, b] = groupExercises(stations, iv.station, 2);
-      speak(`${n1}: ${a.name}. ${n2}: ${b.name}. Go!`);
-    } else {
-      const nextStation = iv.kind === 'rest' ? iv.station + 1 : 1;
-      const [a, b] = groupExercises(stations, nextStation, 2);
-      speak(`Next — ${n1}: ${a.name}. ${n2}: ${b.name}`);
-    }
+    const station = iv.kind === 'work' ? iv.station : iv.kind === 'rest' ? iv.station + 1 : 1;
+    const call = groupExercises(stations, station, count)
+      .map((e, i) => `${partner.names[i]}: ${e.name}`)
+      .join('. ');
+    speak(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
     return;
   }
   if (iv.kind === 'work') speak(`${iv.exercise!.name}. Go!`);

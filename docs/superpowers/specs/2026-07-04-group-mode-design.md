@@ -1,4 +1,4 @@
-# Tasha — Group Mode (2–4 Groups)
+# Tasha — Group Mode (1–4 Groups)
 
 **Date:** 2026-07-04
 **Status:** Approved design
@@ -6,15 +6,15 @@
 
 ## Purpose
 
-Extend partner mode to 2–4 named groups rotating together on offset stations.
+Extend partner mode to 1–4 named groups rotating together on offset stations.
 
 ## Data
 
-- `PartnerConfig` becomes `{ on: boolean; names: string[] }` with 2–4 entries.
+- `PartnerConfig` becomes `{ on: boolean; names: string[] }` with 1–4 entries.
   Previously stored `[string, string]` values parse unchanged. Enabling the
   toggle with no stored names defaults to `['A', 'B']`.
 - Setup UI: the existing partner toggle, plus (when on) a "Groups" select
-  (2 | 3 | 4) and one name input per group. Growing the count appends default
+  (1 | 2 | 3 | 4) and one name input per group. Growing the count appends default
   names ('C', 'D'); shrinking truncates. Changing any of it invalidates the
   session (existing setSettings behaviour).
 - Warning (existing style, non-blocking) when `stations < groups`: groups will
@@ -38,8 +38,9 @@ Extend partner mode to 2–4 named groups rotating together on offset stations.
 
 ## Announcements
 
-- `count === 2`: unchanged named announcements
-  ("Steve: squats. Tasha: burpees. Go!" / "Next — Steve: …. Tasha: ….").
+- `count <= 2`: named roll call — count 2 emits the exact pre-group-mode
+  strings ("Steve: squats. Tasha: burpees. Go!" / "Next — Steve: …. Tasha: ….");
+  count 1 is a single-name call ("Red: squats. Go!" / "Next — Red: …").
 - `count >= 3`: short commands — work: "Rotate — go!"; rest: "Rest";
   roundRest: "Round <n+1> coming up" (existing). Prep unchanged (silent).
 - Halfway, countdown beeps + mute, ducking, voice control: unchanged.

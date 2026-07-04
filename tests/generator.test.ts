@@ -214,4 +214,8 @@ describe('groupExercises', () => {
     const three = stations.slice(0, 3);
     expect(groupExercises(three, 2, 3).map((e) => e.id)).toEqual(['s2', 's3', 's1']);
   });
+
+  it('count 1 is the station’s own exercise', () => {
+    expect(groupExercises(stations, 3, 1).map((e) => e.id)).toEqual(['s3']);
+  });
 });

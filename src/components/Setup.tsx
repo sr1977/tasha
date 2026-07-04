@@ -106,8 +106,8 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                   setSettings({ ...settings, partner: { on: true, names } });
                 }}
               >
-                {[2, 3, 4].map((n) => (
-                  <option key={n} value={n}>{n} groups</option>
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
                 ))}
               </select>
               {settings.partner.names.map((name, i) => (
