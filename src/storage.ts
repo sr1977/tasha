@@ -25,7 +25,15 @@ export function savePool(pool: Exercise[]): void {
 export function loadSettings(): Settings {
   const parsed = loadJson<unknown>(SETTINGS_KEY, {});
   const partial = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Settings>) : {};
-  return { ...DEFAULT_SETTINGS, ...partial };
+  const s = { ...DEFAULT_SETTINGS, ...partial };
+  const names = s.partner?.names;
+  if (
+    s.partner &&
+    (!Array.isArray(names) || names.length < 1 || names.length > 4 || !names.every((n) => typeof n === 'string'))
+  ) {
+    s.partner = { on: Boolean(s.partner.on), names: ['A', 'B'] };
+  }
+  return s;
 }
 
 export function saveSettings(s: Settings): void {
