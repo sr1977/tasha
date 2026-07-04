@@ -14,7 +14,7 @@ export interface Exercise {
 
 export interface PartnerConfig {
   on: boolean;
-  names: [string, string];
+  names: string[];
 }
 
 export interface Settings {

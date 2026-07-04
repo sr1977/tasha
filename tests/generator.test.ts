@@ -7,7 +7,7 @@ import {
   sessionDuration,
   replaceInSession,
   banReplacement,
-  partnerExercises,
+  groupExercises,
   stationTemplate,
   PREP_SECS,
 } from '../src/generator';
@@ -197,13 +197,25 @@ describe('stationTemplate', () => {
   });
 });
 
-describe('partnerExercises', () => {
-  const stations = [exp('s1', 'upper'), exp('s2', 'lower'), exp('s3', 'core')];
-  it('offsets partner 2 by one station', () => {
-    expect(partnerExercises(stations, 1).map((e) => e.id)).toEqual(['s1', 's2']);
-    expect(partnerExercises(stations, 2).map((e) => e.id)).toEqual(['s2', 's3']);
+describe('groupExercises', () => {
+  const stations = [exp('s1', 'upper'), exp('s2', 'lower'), exp('s3', 'core'), exp('s4', 'cardio')];
+
+  it('count 2 matches the old partner behaviour incl. wrap', () => {
+    expect(groupExercises(stations, 1, 2).map((e) => e.id)).toEqual(['s1', 's2']);
+    expect(groupExercises(stations, 4, 2).map((e) => e.id)).toEqual(['s4', 's1']);
   });
-  it('wraps partner 2 to station 1 on the last station', () => {
-    expect(partnerExercises(stations, 3).map((e) => e.id)).toEqual(['s3', 's1']);
+
+  it('count 4 on 4 stations covers all stations in rotated order', () => {
+    expect(groupExercises(stations, 1, 4).map((e) => e.id)).toEqual(['s1', 's2', 's3', 's4']);
+    expect(groupExercises(stations, 3, 4).map((e) => e.id)).toEqual(['s3', 's4', 's1', 's2']);
+  });
+
+  it('count 3 on 3 stations wraps correctly', () => {
+    const three = stations.slice(0, 3);
+    expect(groupExercises(three, 2, 3).map((e) => e.id)).toEqual(['s2', 's3', 's1']);
+  });
+
+  it('count 1 is the station’s own exercise', () => {
+    expect(groupExercises(stations, 3, 1).map((e) => e.id)).toEqual(['s3']);
   });
 });

@@ -38,6 +38,13 @@ describe('storage', () => {
     expect(loadSettings().stations).toBe(8);
   });
 
+  it('repairs a degenerate stored partner names array', () => {
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, names: [] } }));
+    expect(loadSettings().partner).toEqual({ on: true, names: ['A', 'B'] });
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, names: ['a', 'b', 'c', 'd', 'e'] } }));
+    expect(loadSettings().partner!.names).toEqual(['A', 'B']);
+  });
+
   it('falls back to seed pool when stored value is JSON null', () => {
     store.set('tasha.pool', 'null');
     expect(loadPool()).toEqual(SEED_POOL);

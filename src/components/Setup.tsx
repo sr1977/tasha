@@ -89,23 +89,46 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
               })
             }
           />
-          Partner mode — two people, offset stations
+          Group mode — rotate together on offset stations
         </label>
         {settings.partner?.on && (
-          <div className="partner-names">
-            {([0, 1] as const).map((i) => (
-              <input
-                key={i}
-                value={settings.partner!.names[i]}
+          <>
+            <div className="partner-names">
+              <select
+                value={settings.partner.names.length}
                 onChange={(e) => {
-                  const names: [string, string] = [...settings.partner!.names];
-                  names[i] = e.target.value;
+                  const count = Number(e.target.value);
+                  const defaults = ['A', 'B', 'C', 'D'];
+                  const names = Array.from(
+                    { length: count },
+                    (_, i) => settings.partner!.names[i] ?? defaults[i],
+                  );
                   setSettings({ ...settings, partner: { on: true, names } });
                 }}
-                placeholder={`Partner ${i + 1}`}
-              />
-            ))}
-          </div>
+              >
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
+                ))}
+              </select>
+              {settings.partner.names.map((name, i) => (
+                <input
+                  key={i}
+                  value={name}
+                  onChange={(e) => {
+                    const names = [...settings.partner!.names];
+                    names[i] = e.target.value;
+                    setSettings({ ...settings, partner: { on: true, names } });
+                  }}
+                  placeholder={`Group ${i + 1}`}
+                />
+              ))}
+            </div>
+            {settings.stations < settings.partner.names.length && (
+              <p className="warn">
+                Fewer stations than groups — some groups will share a station.
+              </p>
+            )}
+          </>
         )}
         {voices.length > 0 && (
           <div className="voice-row">

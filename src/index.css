@@ -363,6 +363,9 @@ select {
   flex-direction: column;
   gap: var(--space-xs);
 }
+.workout .label.partner:has(div:nth-child(3)) {
+  font-size: clamp(1.3rem, 3.8vw, 2.4rem);
+}
 .workout .cue {
   font-size: 1.25rem;
   font-style: italic;
@@ -382,6 +385,8 @@ select {
   font-weight: 500;
   letter-spacing: 0.02em;
   color: oklch(1 0 0 / 0.85);
+  max-width: 92vw; /* 4-group previews wrap instead of overflowing */
+  text-wrap: balance;
 }
 .workout .controls {
   display: flex;
