@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { banReplacement, partnerExercises, replaceInSession, sessionDuration, stationTemplate } from '../generator';
+import { banReplacement, groupExercises, replaceInSession, sessionDuration, stationTemplate } from '../generator';
 import { fmt } from './Setup';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
@@ -10,14 +10,21 @@ import { createVoiceControl, voiceSupported } from '../voice';
 function announce(state: TimerState, partner?: PartnerConfig): void {
   const iv = state.session[state.index];
   if (partner?.on && iv.kind !== 'prep') {
+    const count = partner.names.length;
+    if (count >= 3) {
+      if (iv.kind === 'work') speak('Rotate — go!');
+      else if (iv.kind === 'rest') speak('Rest');
+      else speak(`Round ${iv.round + 1} coming up`);
+      return;
+    }
     const stations = stationTemplate(state.session);
     const [n1, n2] = partner.names;
     if (iv.kind === 'work') {
-      const [a, b] = partnerExercises(stations, iv.station);
+      const [a, b] = groupExercises(stations, iv.station, 2);
       speak(`${n1}: ${a.name}. ${n2}: ${b.name}. Go!`);
     } else {
       const nextStation = iv.kind === 'rest' ? iv.station + 1 : 1;
-      const [a, b] = partnerExercises(stations, nextStation);
+      const [a, b] = groupExercises(stations, nextStation, 2);
       speak(`Next — ${n1}: ${a.name}. ${n2}: ${b.name}`);
     }
     return;
@@ -285,7 +292,7 @@ export function Workout({
       </div>
       {partnerOn && iv.kind === 'work' ? (
         <div className="label partner" key={state.index}>
-          {partnerExercises(stations, iv.station).map((e, i) => (
+          {groupExercises(stations, iv.station, partner!.names.length).map((e, i) => (
             <div key={i}>
               {partner!.names[i]}: {e.name}
             </div>
@@ -307,7 +314,7 @@ export function Workout({
           iv.kind !== 'prep' && (
             <div className="next">
               Next —{' '}
-              {partnerExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1)
+              {groupExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1, partner!.names.length)
                 .map((e, i) => `${partner!.names[i]}: ${e.name}`)
                 .join(' · ')}
             </div>

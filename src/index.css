@@ -363,6 +363,9 @@ select {
   flex-direction: column;
   gap: var(--space-xs);
 }
+.workout .label.partner:has(div:nth-child(3)) {
+  font-size: clamp(1.3rem, 3.8vw, 2.4rem);
+}
 .workout .cue {
   font-size: 1.25rem;
   font-style: italic;
