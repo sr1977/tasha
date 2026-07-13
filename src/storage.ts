@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Exercise, type Settings } from './types';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Settings } from './types';
 import { SEED_POOL } from './seed';
 
 const POOL_KEY = 'tasha.pool';
@@ -15,7 +15,9 @@ export function loadJson<T>(key: string, fallback: T): T {
 
 export function loadPool(): Exercise[] {
   const parsed = loadJson<unknown>(POOL_KEY, SEED_POOL);
-  return Array.isArray(parsed) ? (parsed as Exercise[]) : SEED_POOL;
+  if (!Array.isArray(parsed)) return SEED_POOL;
+  // Cardio was dropped — filter it out of pools saved before the change.
+  return (parsed as Exercise[]).filter((e) => (e.category as string) !== 'cardio');
 }
 
 export function savePool(pool: Exercise[]): void {
@@ -26,12 +28,18 @@ export function loadSettings(): Settings {
   const parsed = loadJson<unknown>(SETTINGS_KEY, {});
   const partial = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Settings>) : {};
   const s = { ...DEFAULT_SETTINGS, ...partial };
-  const names = s.partner?.names;
-  if (
-    s.partner &&
-    (!Array.isArray(names) || names.length < 1 || names.length > 4 || !names.every((n) => typeof n === 'string'))
-  ) {
-    s.partner = { on: Boolean(s.partner.on), names: ['A', 'B'] };
+  if (!Array.isArray(s.roster) || !s.roster.every((n) => typeof n === 'string')) {
+    s.roster = DEFAULT_ROSTER;
+  }
+  const groups = s.partner?.groups;
+  const validGroups =
+    Array.isArray(groups) &&
+    groups.length >= 1 &&
+    groups.length <= 4 &&
+    groups.every((g) => Array.isArray(g) && g.every((p) => typeof p === 'string'));
+  if (s.partner && !validGroups) {
+    // Reset assignments (e.g. migrating old label-only configs); keep on/off.
+    s.partner = { on: Boolean(s.partner.on), groups: DEFAULT_SETTINGS.partner!.groups };
   }
   return s;
 }

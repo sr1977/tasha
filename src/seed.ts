@@ -21,10 +21,6 @@ const raw: [string, Category, Equipment, string][] = [
   ['Russian twists', 'core', 'bodyweight', 'rotate from the torso'],
   ['Leg raises', 'core', 'bodyweight', 'press your lower back into the floor'],
   ['Bicycle crunches', 'core', 'bodyweight', 'slow and controlled'],
-  ['Burpees', 'cardio', 'bodyweight', 'land soft, jump tall'],
-  ['Mountain climbers', 'cardio', 'bodyweight', 'hips level, drive the knees'],
-  ['High knees', 'cardio', 'bodyweight', 'knees to hip height'],
-  ['Jumping jacks', 'cardio', 'bodyweight', 'stay light on your feet'],
 ];
 
 export const SEED_POOL: Exercise[] = raw.map(([name, category, equipment, cue], i) => ({

@@ -1,4 +1,4 @@
-export type Category = 'upper' | 'lower' | 'core' | 'cardio';
+export type Category = 'upper' | 'lower' | 'core';
 export type Equipment = 'bodyweight' | 'dumbbells';
 
 export type Pref = 'fav' | 'ban';
@@ -14,7 +14,8 @@ export interface Exercise {
 
 export interface PartnerConfig {
   on: boolean;
-  names: string[];
+  /** groups[i] = people assigned to group i; length is the group count (1–4). */
+  groups: string[][];
 }
 
 export interface Settings {
@@ -24,7 +25,11 @@ export interface Settings {
   roundRestSecs: number;
   totalMins: number;
   partner?: PartnerConfig;
+  /** All known people, assigned or not. */
+  roster?: string[];
 }
+
+export const DEFAULT_ROSTER = ['Steve', 'Amanda', 'Rebecca', 'Kathleen', 'Silki', 'Stew'];
 
 export const DEFAULT_SETTINGS: Settings = {
   workSecs: 40,
@@ -32,6 +37,14 @@ export const DEFAULT_SETTINGS: Settings = {
   stations: 6,
   roundRestSecs: 60,
   totalMins: 45,
+  partner: {
+    on: true,
+    groups: [
+      ['Steve', 'Amanda', 'Rebecca'],
+      ['Kathleen', 'Silki', 'Stew'],
+    ],
+  },
+  roster: DEFAULT_ROSTER,
 };
 
 export type IntervalKind = 'prep' | 'work' | 'rest' | 'roundRest';

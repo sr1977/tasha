@@ -2,7 +2,7 @@ import type { Category, Exercise, Session, Settings } from './types';
 
 export const PREP_SECS = 10;
 
-const CATEGORY_ORDER: Category[] = ['upper', 'lower', 'core', 'cardio'];
+const CATEGORY_ORDER: Category[] = ['upper', 'lower', 'core'];
 
 export function roundCount(s: Settings): number {
   const roundLength = s.stations * (s.workSecs + s.restSecs) + s.roundRestSecs;
@@ -79,12 +79,57 @@ export function buildSession(stations: Exercise[], s: Settings): Session {
   return session;
 }
 
+// Groups rotate on offset stations sharing one set of dumbbells, so any window
+// of `count` consecutive stations (the ones worked at the same moment) may hold
+// at most one dumbbell exercise. Reorder the picks to space dumbbells `count`
+// apart, swapping surplus dumbbells for pool bodyweight when there are too many
+// to space at all (> floor(n/count)).
+export function spaceDumbbells(
+  picks: Exercise[],
+  pool: Exercise[],
+  count: number,
+  rand: () => number = Math.random,
+): Exercise[] {
+  const n = picks.length;
+  const isDb = (e: Exercise) => e.equipment === 'dumbbells';
+  if (count <= 1 || n === 0) return picks;
+
+  const maxD = Math.floor(n / count);
+  const dumbbells = picks.filter(isDb);
+  const body = picks.filter((e) => !isDb(e));
+
+  if (dumbbells.length > maxD) {
+    const used = new Set(picks.map((e) => e.id));
+    const spare = shuffle(
+      pool.filter((e) => !isDb(e) && e.pref !== 'ban' && !used.has(e.id)),
+      rand,
+    );
+    while (dumbbells.length > maxD && spare.length > 0) {
+      const dropped = dumbbells.pop()!;
+      const i = spare.findIndex((e) => e.category === dropped.category);
+      body.push(spare.splice(i >= 0 ? i : 0, 1)[0]);
+    }
+    // ponytail: if the pool lacks enough bodyweight moves we keep the leftover
+    // dumbbells and just space them as evenly as n allows below.
+  }
+
+  const d = dumbbells.length;
+  const slots: (Exercise | null)[] = new Array(n).fill(null);
+  const gap = d > 0 ? n / d : 0; // >= count once d <= maxD
+  for (let i = 0; i < d; i++) slots[Math.floor(i * gap)] = dumbbells[i];
+  let bi = 0;
+  for (let i = 0; i < n; i++) if (slots[i] === null) slots[i] = body[bi++];
+  return slots as Exercise[];
+}
+
 export function generateSession(
   pool: Exercise[],
   s: Settings,
   rand: () => number = Math.random,
 ): Session {
-  return buildSession(pickStations(pool, s.stations, rand), s);
+  const count = s.partner?.on ? s.partner.names.length : 1;
+  const picks = spaceDumbbells(pickStations(pool, s.stations, rand), pool, count, rand);
+  return buildSession(picks, s);
 }
 
 export function sessionDuration(session: Session): number {
@@ -114,6 +159,12 @@ export function banReplacement(
   const candidates = sameCat.length > 0 ? sameCat : pool.filter(ok);
   if (candidates.length === 0) return null;
   return candidates[Math.floor(rand() * candidates.length)];
+}
+
+// Display/announce name for a group: its members, or a numbered fallback when
+// no one is assigned yet.
+export function groupLabel(group: string[] | undefined, index: number): string {
+  return group && group.length > 0 ? group.join(', ') : `Group ${index + 1}`;
 }
 
 export function groupExercises(stations: Exercise[], station: number, count: number): Exercise[] {

@@ -9,6 +9,7 @@ import {
   banReplacement,
   groupExercises,
   stationTemplate,
+  spaceDumbbells,
   PREP_SECS,
 } from '../src/generator';
 import { DEFAULT_SETTINGS, type Category, type Exercise, type Settings } from '../src/types';
@@ -24,7 +25,6 @@ const pool: Exercise[] = [
   ex('u1', 'upper'), ex('u2', 'upper'),
   ex('l1', 'lower'), ex('l2', 'lower'),
   ex('c1', 'core'), ex('c2', 'core'),
-  ex('k1', 'cardio'), ex('k2', 'cardio'),
 ];
 
 // 2 stations, work 5, rest 3, round rest 7 => roundLength 23; 1 min target => 2 rounds
@@ -51,11 +51,11 @@ describe('pickStations', () => {
     expect(pickStations(pool, 6)).toHaveLength(6);
   });
 
-  it('balances across categories (8 picks from 4 categories = 2 each)', () => {
-    const picks = pickStations(pool, 8);
+  it('balances across categories (6 picks from 3 categories = 2 each)', () => {
+    const picks = pickStations(pool, 6);
     const counts = new Map<Category, number>();
     for (const p of picks) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
-    expect([...counts.values()]).toEqual([2, 2, 2, 2]);
+    expect([...counts.values()]).toEqual([2, 2, 2]);
   });
 
   it('skips categories with no exercises', () => {
@@ -197,8 +197,49 @@ describe('stationTemplate', () => {
   });
 });
 
+describe('spaceDumbbells', () => {
+  const db = (id: string, category: Category): Exercise => ({
+    id,
+    name: id,
+    category,
+    equipment: 'dumbbells',
+  });
+  // circular window of `count` consecutive stations must hold <= 1 dumbbell
+  const maxConcurrentDb = (out: Exercise[], count: number) => {
+    let worst = 0;
+    for (let s = 0; s < out.length; s++) {
+      let c = 0;
+      for (let g = 0; g < count; g++) if (out[(s + g) % out.length].equipment === 'dumbbells') c++;
+      worst = Math.max(worst, c);
+    }
+    return worst;
+  };
+
+  it('spaces dumbbells so 2 groups never share the weights (adjacent pair)', () => {
+    const picks = [db('d1', 'upper'), db('d2', 'lower'), ex('b1', 'core'), ex('b2', 'core')];
+    const out = spaceDumbbells(picks, picks, 2);
+    expect(out).toHaveLength(4);
+    expect(maxConcurrentDb(out, 2)).toBe(1);
+  });
+
+  it('swaps surplus dumbbells for pool bodyweight when too many to space', () => {
+    // 4 dumbbells over 4 stations, 2 groups => max 2 may stay; 2 get swapped out.
+    const picks = [db('d1', 'upper'), db('d2', 'upper'), db('d3', 'lower'), db('d4', 'lower')];
+    const pool = [...picks, ex('b1', 'upper'), ex('b2', 'lower')];
+    const out = spaceDumbbells(picks, pool, 2, () => 0);
+    expect(out).toHaveLength(4);
+    expect(out.filter((e) => e.equipment === 'dumbbells')).toHaveLength(2);
+    expect(maxConcurrentDb(out, 2)).toBe(1);
+  });
+
+  it('leaves picks untouched for a single group (no concurrency)', () => {
+    const picks = [db('d1', 'upper'), db('d2', 'lower')];
+    expect(spaceDumbbells(picks, picks, 1)).toEqual(picks);
+  });
+});
+
 describe('groupExercises', () => {
-  const stations = [exp('s1', 'upper'), exp('s2', 'lower'), exp('s3', 'core'), exp('s4', 'cardio')];
+  const stations = [exp('s1', 'upper'), exp('s2', 'lower'), exp('s3', 'core'), exp('s4', 'upper')];
 
   it('count 2 matches the old partner behaviour incl. wrap', () => {
     expect(groupExercises(stations, 1, 2).map((e) => e.id)).toEqual(['s1', 's2']);

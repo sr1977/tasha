@@ -2,15 +2,16 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
 import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { banReplacement, groupExercises, replaceInSession, sessionDuration, stationTemplate } from '../generator';
+import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationTemplate } from '../generator';
 import { fmt } from './Setup';
+import { DumbbellIcon } from './DumbbellIcon';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
 
 function announce(state: TimerState, partner?: PartnerConfig): void {
   const iv = state.session[state.index];
   if (partner?.on && iv.kind !== 'prep') {
-    const count = partner.names.length;
+    const count = partner.groups.length;
     if (count >= 3) {
       if (iv.kind === 'work') speak('Rotate — go!');
       else if (iv.kind === 'rest') speak('Rest');
@@ -22,7 +23,7 @@ function announce(state: TimerState, partner?: PartnerConfig): void {
     const stations = stationTemplate(state.session);
     const station = iv.kind === 'work' ? iv.station : iv.kind === 'rest' ? iv.station + 1 : 1;
     const call = groupExercises(stations, station, count)
-      .map((e, i) => `${partner.names[i]}: ${e.name}`)
+      .map((e, i) => `${groupLabel(partner.groups[i], i)}: ${e.name}`)
       .join('. ');
     speak(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
     return;
@@ -290,9 +291,10 @@ export function Workout({
       </div>
       {partnerOn && iv.kind === 'work' ? (
         <div className="label partner" key={state.index}>
-          {groupExercises(stations, iv.station, partner!.names.length).map((e, i) => (
+          {groupExercises(stations, iv.station, partner!.groups.length).map((e, i) => (
             <div key={i}>
-              {partner!.names[i]}: {e.name}
+              {groupLabel(partner!.groups[i], i)}: {e.name}
+              {e.equipment === 'dumbbells' && <DumbbellIcon />}
             </div>
           ))}
         </div>
@@ -300,6 +302,7 @@ export function Workout({
         <>
           <div className="label" key={state.index}>
             {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
+            {iv.kind === 'work' && iv.exercise!.equipment === 'dumbbells' && <DumbbellIcon />}
           </div>
           {!partnerOn && iv.kind === 'work' && iv.exercise?.cue && (
             <div className="cue">{iv.exercise.cue}</div>
@@ -312,8 +315,8 @@ export function Workout({
           iv.kind !== 'prep' && (
             <div className="next">
               Next —{' '}
-              {groupExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1, partner!.names.length)
-                .map((e, i) => `${partner!.names[i]}: ${e.name}`)
+              {groupExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1, partner!.groups.length)
+                .map((e, i) => `${groupLabel(partner!.groups[i], i)}: ${e.name}`)
                 .join(' · ')}
             </div>
           )

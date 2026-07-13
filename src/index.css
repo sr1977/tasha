@@ -203,10 +203,34 @@ select {
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
-.partner-names {
+.partner-count {
+  margin-bottom: var(--space-sm);
+}
+.roster {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.roster li {
   display: flex;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  align-items: center;
+}
+.roster .person-name {
+  min-width: 6rem;
+  font-weight: 600;
+}
+.roster .add-person input {
+  flex: 1;
+}
+.group-preview {
+  margin: 0 0 var(--space-md);
+  padding-left: 1.4em;
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 /* ---- pool ---- */
@@ -347,6 +371,18 @@ select {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: oklch(1 0 0 / 0.75);
+}
+.dumbbell {
+  width: 0.9em;
+  height: 0.9em;
+  flex-shrink: 0;
+  vertical-align: -0.08em;
+  margin-left: 0.35em;
+}
+.pool-list .dumbbell,
+.stations .dumbbell {
+  margin-left: 0;
+  margin-right: 0.4em;
 }
 .workout .label {
   font-family: var(--font-display);

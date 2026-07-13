@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Exercise, Session, Settings } from '../types';
-import { banReplacement, buildSession, generateSession, roundCount, sessionDuration } from '../generator';
+import { DEFAULT_ROSTER, type Exercise, type Session, type Settings } from '../types';
+import { banReplacement, buildSession, generateSession, groupLabel, roundCount, sessionDuration } from '../generator';
 import { getVoiceName, listVoices, setVoiceName, speak } from '../audio';
+import { DumbbellIcon } from './DumbbellIcon';
 import { Music } from './Music';
 
 export const fmt = (secs: number) =>
@@ -19,6 +20,7 @@ interface Props {
 
 export function Setup({ pool, settings, setSettings, session, setSession, onStart, goToPool }: Props) {
   const [drafts, setDrafts] = useState<Partial<Record<keyof Settings, string>>>({});
+  const [newPerson, setNewPerson] = useState('');
   const [voices, setVoices] = useState(listVoices);
   const [voiceName, setVoiceNameState] = useState<string>(() => getVoiceName() ?? '');
   useEffect(() => {
@@ -38,6 +40,35 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     next[i] = replacement;
     setSession(buildSession(next, settings));
   };
+
+  const roster = settings.roster ?? DEFAULT_ROSTER;
+  const groups = settings.partner?.groups ?? [];
+  const groupOf = (person: string) => groups.findIndex((g) => g.includes(person));
+  const setGroups = (next: string[][]) =>
+    setSettings({ ...settings, partner: { on: true, groups: next } });
+
+  const assign = (person: string, index: number) => {
+    const next = groups.map((g) => g.filter((p) => p !== person));
+    if (index >= 0) next[index] = [...next[index], person];
+    setGroups(next);
+  };
+  const setGroupCount = (n: number) =>
+    setGroups(Array.from({ length: n }, (_, i) => groups[i] ?? [])); // extra members drop to unassigned
+  const addPerson = () => {
+    const name = newPerson.trim();
+    if (!name || roster.includes(name)) return;
+    setSettings({ ...settings, roster: [...roster, name] });
+    setNewPerson('');
+  };
+  const deletePerson = (person: string) =>
+    setSettings({
+      ...settings,
+      roster: roster.filter((p) => p !== person),
+      partner: settings.partner && {
+        ...settings.partner,
+        groups: groups.map((g) => g.filter((p) => p !== person)),
+      },
+    });
 
   const num = (key: keyof Settings, label: string, min: number) => (
     <label>
@@ -93,37 +124,45 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
         </label>
         {settings.partner?.on && (
           <>
-            <div className="partner-names">
-              <select
-                value={settings.partner.names.length}
-                onChange={(e) => {
-                  const count = Number(e.target.value);
-                  const defaults = ['A', 'B', 'C', 'D'];
-                  const names = Array.from(
-                    { length: count },
-                    (_, i) => settings.partner!.names[i] ?? defaults[i],
-                  );
-                  setSettings({ ...settings, partner: { on: true, names } });
-                }}
-              >
+            <div className="partner-count">
+              <select value={groups.length} onChange={(e) => setGroupCount(Number(e.target.value))}>
                 {[1, 2, 3, 4].map((n) => (
                   <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
                 ))}
               </select>
-              {settings.partner.names.map((name, i) => (
-                <input
-                  key={i}
-                  value={name}
-                  onChange={(e) => {
-                    const names = [...settings.partner!.names];
-                    names[i] = e.target.value;
-                    setSettings({ ...settings, partner: { on: true, names } });
-                  }}
-                  placeholder={`Group ${i + 1}`}
-                />
-              ))}
             </div>
-            {settings.stations < settings.partner.names.length && (
+            <ul className="roster">
+              {roster.map((person) => (
+                <li key={person}>
+                  <span className="person-name">{person}</span>
+                  <select
+                    value={groupOf(person)}
+                    onChange={(e) => assign(person, Number(e.target.value))}
+                  >
+                    <option value={-1}>Unassigned</option>
+                    {groups.map((_, i) => (
+                      <option key={i} value={i}>{`Group ${i + 1}`}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => deletePerson(person)} title="Remove person">✕</button>
+                </li>
+              ))}
+              <li className="add-person">
+                <input
+                  value={newPerson}
+                  onChange={(e) => setNewPerson(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addPerson()}
+                  placeholder="Add a person"
+                />
+                <button onClick={addPerson}>Add</button>
+              </li>
+            </ul>
+            <ol className="group-preview">
+              {groups.map((g, i) => (
+                <li key={i}>{groupLabel(g, i)}</li>
+              ))}
+            </ol>
+            {settings.stations < groups.length && (
               <p className="warn">
                 Fewer stations than groups — some groups will share a station.
               </p>
@@ -176,6 +215,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
             <ol className="stations">
               {stations.map((s, i) => (
                 <li key={`${s.id}-${i}`}>
+                  {s.equipment === 'dumbbells' && <DumbbellIcon />}
                   {s.name} <small>({s.category})</small>{' '}
                   <button onClick={() => swap(i)} title="Swap this station">↻</button>
                 </li>
