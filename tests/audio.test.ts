@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickVoice } from '../src/audio';
+import { encouragement, pickVoice } from '../src/audio';
 
 const v = (name: string, lang = 'en-GB') => ({ name, lang });
 
@@ -39,5 +39,11 @@ describe('pickVoice', () => {
   it('returns null when nothing matches or list is empty', () => {
     expect(pickVoice([v('Daniel')], null)).toBeNull();
     expect(pickVoice([], null)).toBeNull();
+  });
+});
+
+describe('encouragement', () => {
+  it('always names the person', () => {
+    for (let i = 0; i < 50; i++) expect(encouragement('Steve')).toContain('Steve');
   });
 });

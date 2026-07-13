@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_ROSTER, type Exercise, type Session, type Settings } from '../types';
-import { banReplacement, buildSession, generateSession, groupLabel, roundCount, sessionDuration } from '../generator';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Session, type Settings } from '../types';
+import { banReplacement, buildSession, generateSession, groupLabel, roundCount, sessionDuration, stationsForRound } from '../generator';
 import { getVoiceName, listVoices, setVoiceName, speak } from '../audio';
 import { DumbbellIcon } from './DumbbellIcon';
 import { Music } from './Music';
@@ -29,16 +29,20 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     window.speechSynthesis?.addEventListener?.('voiceschanged', refresh);
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', refresh);
   }, []);
-  const stations =
-    session?.filter((iv) => iv.kind === 'work' && iv.round === 1).map((iv) => iv.exercise!) ?? null;
+  // One station set per distinct round (rounds cycle these sets).
+  const numSets = Math.max(1, Math.min(settings.distinctRounds ?? 1, roundCount(settings)));
+  const roundSets = session
+    ? Array.from({ length: numSets }, (_, k) => stationsForRound(session, k + 1))
+    : null;
 
-  const swap = (i: number) => {
-    if (!stations) return;
-    const replacement = banReplacement(pool, stations, stations[i]);
+  const swap = (setIndex: number, i: number) => {
+    if (!roundSets) return;
+    const set = roundSets[setIndex];
+    const replacement = banReplacement(pool, set, set[i]);
     if (!replacement) return;
-    const next = [...stations];
-    next[i] = replacement;
-    setSession(buildSession(next, settings));
+    const nextSets = roundSets.map((s) => [...s]);
+    nextSets[setIndex][i] = replacement;
+    setSession(buildSession(nextSets, settings));
   };
 
   const roster = settings.roster ?? DEFAULT_ROSTER;
@@ -108,6 +112,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           {num('stations', 'Stations', 1)}
           {num('roundRestSecs', 'Round rest (seconds)', 0)}
           {num('totalMins', 'Target length (minutes)', 5)}
+          {num('distinctRounds', 'Distinct rounds', 1)}
         </div>
         <label className="partner-toggle">
           <input
@@ -116,7 +121,10 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
             onChange={(e) =>
               setSettings({
                 ...settings,
-                partner: { on: e.target.checked, names: settings.partner?.names ?? ['A', 'B'] },
+                partner: {
+                  on: e.target.checked,
+                  groups: settings.partner?.groups ?? DEFAULT_SETTINGS.partner!.groups,
+                },
               })
             }
           />
@@ -207,20 +215,25 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
             </button>
           </>
         )}
-        {session && stations && (
+        {session && roundSets && (
           <>
             <p>
               {roundCount(settings)} rounds · actual duration {fmt(sessionDuration(session))}
             </p>
-            <ol className="stations">
-              {stations.map((s, i) => (
-                <li key={`${s.id}-${i}`}>
-                  {s.equipment === 'dumbbells' && <DumbbellIcon />}
-                  {s.name} <small>({s.category})</small>{' '}
-                  <button onClick={() => swap(i)} title="Swap this station">↻</button>
-                </li>
-              ))}
-            </ol>
+            {roundSets.map((set, k) => (
+              <div key={k}>
+                {roundSets.length > 1 && <h3 className="round-heading">Round {k + 1}</h3>}
+                <ol className="stations">
+                  {set.map((s, i) => (
+                    <li key={`${s.id}-${i}`}>
+                      {s.equipment === 'dumbbells' && <DumbbellIcon />}
+                      {s.name} <small>({s.category})</small>{' '}
+                      <button onClick={() => swap(k, i)} title="Swap this station">↻</button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
             <button className="start" onClick={onStart}>Start workout ▶</button>
           </>
         )}

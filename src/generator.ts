@@ -50,10 +50,13 @@ export function pickStations(
   return picks;
 }
 
-export function buildSession(stations: Exercise[], s: Settings): Session {
+// Round r uses sets[(r-1) % sets.length], so multiple distinct sets cycle
+// across rounds (pass a single-element array for identical rounds).
+export function buildSession(sets: Exercise[][], s: Settings): Session {
   const rounds = roundCount(s);
   const session: Session = [{ kind: 'prep', duration: PREP_SECS, round: 1, station: 0 }];
   for (let r = 1; r <= rounds; r++) {
+    const stations = sets[(r - 1) % sets.length];
     stations.forEach((exercise, i) => {
       session.push({ kind: 'work', exercise, duration: s.workSecs, round: r, station: i + 1 });
       if (i < stations.length - 1) {
@@ -69,7 +72,7 @@ export function buildSession(stations: Exercise[], s: Settings): Session {
     if (r < rounds) {
       session.push({
         kind: 'roundRest',
-        exercise: stations[0],
+        exercise: sets[r % sets.length][0], // preview the next round's first station
         duration: s.roundRestSecs,
         round: r,
         station: 0,
@@ -122,14 +125,30 @@ export function spaceDumbbells(
   return slots as Exercise[];
 }
 
+// Build `numSets` distinct station sets by picking them all in one balanced
+// pass, then slicing — consecutive slices draw different exercises per category,
+// so the rounds vary. Each set is dumbbell-spaced independently.
+export function pickRoundSets(
+  pool: Exercise[],
+  stationsPerRound: number,
+  numSets: number,
+  count: number,
+  rand: () => number = Math.random,
+): Exercise[][] {
+  const all = pickStations(pool, stationsPerRound * numSets, rand);
+  return Array.from({ length: numSets }, (_, k) =>
+    spaceDumbbells(all.slice(k * stationsPerRound, (k + 1) * stationsPerRound), pool, count, rand),
+  );
+}
+
 export function generateSession(
   pool: Exercise[],
   s: Settings,
   rand: () => number = Math.random,
 ): Session {
-  const count = s.partner?.on ? s.partner.names.length : 1;
-  const picks = spaceDumbbells(pickStations(pool, s.stations, rand), pool, count, rand);
-  return buildSession(picks, s);
+  const count = s.partner?.on ? s.partner.groups.length : 1;
+  const numSets = Math.max(1, Math.min(s.distinctRounds ?? 1, roundCount(s)));
+  return buildSession(pickRoundSets(pool, s.stations, numSets, count, rand), s);
 }
 
 export function sessionDuration(session: Session): number {
@@ -171,12 +190,12 @@ export function groupExercises(stations: Exercise[], station: number, count: num
   return Array.from({ length: count }, (_, g) => stations[(station - 1 + g) % stations.length]);
 }
 
-// Latest exercise seen per station — later rounds reflect mid-session
-// replacements (bans), so last write wins.
-export function stationTemplate(session: Session): Exercise[] {
+// The station→exercise layout of one round (rounds can now differ). Reads that
+// round's own work intervals, so mid-session replacements (bans/swaps) show.
+export function stationsForRound(session: Session, round: number): Exercise[] {
   const stations: Exercise[] = [];
   for (const iv of session) {
-    if (iv.kind === 'work' && iv.exercise) stations[iv.station - 1] = iv.exercise;
+    if (iv.kind === 'work' && iv.round === round && iv.exercise) stations[iv.station - 1] = iv.exercise;
   }
   return stations;
 }

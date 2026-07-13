@@ -1,8 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
-import { beep, cancelSpeech, speak, transitionTone } from '../audio';
-import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationTemplate } from '../generator';
+import { beep, cancelSpeech, encouragement, speak, transitionTone } from '../audio';
+import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationsForRound } from '../generator';
 import { fmt } from './Setup';
 import { DumbbellIcon } from './DumbbellIcon';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
@@ -19,10 +19,10 @@ function announce(state: TimerState, partner?: PartnerConfig): void {
       return;
     }
     // 1-2 groups: named roll call (for count 2 this emits the exact
-    // pre-group-mode strings)
-    const stations = stationTemplate(state.session);
+    // pre-group-mode strings). roundRest previews the next round's set.
+    const round = iv.kind === 'roundRest' ? iv.round + 1 : iv.round;
     const station = iv.kind === 'work' ? iv.station : iv.kind === 'rest' ? iv.station + 1 : 1;
-    const call = groupExercises(stations, station, count)
+    const call = groupExercises(stationsForRound(state.session, round), station, count)
       .map((e, i) => `${groupLabel(partner.groups[i], i)}: ${e.name}`)
       .join('. ');
     speak(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
@@ -53,6 +53,7 @@ export function Workout({
   const playerRef = useRef<PlayerHandle | null>(null);
   const [track, setTrack] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(() => localStorage.getItem('tasha.voice') !== '0');
+  const [picking, setPicking] = useState(false);
 
   // Live status/kind refs so the async player-ready callback sees current state.
   const statusRef = useRef(state.status);
@@ -77,6 +78,18 @@ export function Workout({
         session: replaceInSession(state.session, state.index, iv.exercise.id, replacement),
       });
     }
+  };
+
+  // Swap the current station's exercise for a chosen one, now and for the rest
+  // of the session (fromIndex = index-1 so the live interval updates too).
+  const changeExercise = (replacement: Exercise) => {
+    const cur = state.session[state.index];
+    setPicking(false);
+    if (cur.kind !== 'work' || !cur.exercise || replacement.id === cur.exercise.id) return;
+    dispatch({
+      type: 'replace',
+      session: replaceInSession(state.session, state.index - 1, cur.exercise.id, replacement),
+    });
   };
 
   // Music lifecycle: get the shared player + start the active playlist on
@@ -218,7 +231,7 @@ export function Workout({
       playerRef.current?.duck();
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
         beep();
-        playerRef.current?.duck(0, 1300); // beeps get full mute
+        playerRef.current?.duck(0.5, 1300); // dip only lightly for the countdown clicks
       }
       return;
     }
@@ -227,7 +240,7 @@ export function Workout({
       prevSecs.current = secsLeft;
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
         beep();
-        playerRef.current?.duck(0, 1300); // beeps get full mute
+        playerRef.current?.duck(0.5, 1300); // dip only lightly for the countdown clicks
       }
       const cur = state.session[state.index];
       const half = Math.ceil(cur.duration / 2);
@@ -240,7 +253,14 @@ export function Workout({
         halfwayRef.current !== state.index
       ) {
         halfwayRef.current = state.index;
-        speak('Halfway!');
+        // Mid-set is the one collision-free speech slot — use it to shout a
+        // random named encouragement, falling back to the plain halfway cue.
+        const people = partner?.on ? partner.groups.flat() : [];
+        speak(
+          people.length > 0
+            ? encouragement(people[Math.floor(Math.random() * people.length)])
+            : 'Halfway!',
+        );
         playerRef.current?.duck();
       }
     }
@@ -261,7 +281,8 @@ export function Workout({
   const iv = state.session[state.index];
   const stationsPerRound = Math.max(...session.map((i) => i.station));
   const partnerOn = partner?.on ?? false;
-  const stations = partnerOn ? stationTemplate(state.session) : [];
+  const roundStations = (round: number) => stationsForRound(state.session, round);
+  const nextWork = state.session.slice(state.index + 1).find((x) => x.kind === 'work') ?? null;
   const totalRounds = session[session.length - 1].round;
   const total = sessionDuration(session);
   const elapsed =
@@ -291,7 +312,7 @@ export function Workout({
       </div>
       {partnerOn && iv.kind === 'work' ? (
         <div className="label partner" key={state.index}>
-          {groupExercises(stations, iv.station, partner!.groups.length).map((e, i) => (
+          {groupExercises(roundStations(iv.round), iv.station, partner!.groups.length).map((e, i) => (
             <div key={i}>
               {groupLabel(partner!.groups[i], i)}: {e.name}
               {e.equipment === 'dumbbells' && <DumbbellIcon />}
@@ -310,12 +331,22 @@ export function Workout({
         </>
       )}
       <div className="clock">{secsLeft >= 60 ? fmt(secsLeft) : secsLeft}</div>
+      {iv.kind === 'work' && nextWork && (
+        <div className="next">
+          Next{partnerOn ? ' — ' : ': '}
+          {partnerOn
+            ? groupExercises(roundStations(nextWork.round), nextWork.station, partner!.groups.length)
+                .map((e, i) => `${groupLabel(partner!.groups[i], i)}: ${e.name}`)
+                .join(' · ')
+            : nextWork.exercise!.name}
+        </div>
+      )}
       {iv.kind !== 'work' &&
         (partnerOn ? (
-          iv.kind !== 'prep' && (
+          iv.kind !== 'prep' && nextWork && (
             <div className="next">
               Next —{' '}
-              {groupExercises(stations, iv.kind === 'rest' ? iv.station + 1 : 1, partner!.groups.length)
+              {groupExercises(roundStations(nextWork.round), nextWork.station, partner!.groups.length)
                 .map((e, i) => `${groupLabel(partner!.groups[i], i)}: ${e.name}`)
                 .join(' · ')}
             </div>
@@ -332,10 +363,32 @@ export function Workout({
           {state.status === 'paused' ? '▶' : '⏸'}
         </button>
         <button onClick={() => dispatch({ type: 'next' })} title="Skip (→)">⏭</button>
+        {iv.kind === 'work' && (
+          <button onClick={() => setPicking(true)} title="Change this exercise">🔁</button>
+        )}
         {iv.kind === 'work' && pool.find((p) => p.id === iv.exercise!.id)?.pref !== 'ban' && (
           <button onClick={ban} title="Never again — ban this exercise and swap it out">👎</button>
         )}
       </div>
+      {picking && iv.kind === 'work' && (
+        <div className="picker" onClick={() => setPicking(false)}>
+          <div className="picker-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="picker-title">Change {iv.exercise!.name} to…</div>
+            <ul>
+              {pool
+                .filter((e) => e.pref !== 'ban')
+                .map((e) => (
+                  <li key={e.id}>
+                    <button onClick={() => changeExercise(e)}>
+                      {e.equipment === 'dumbbells' && <DumbbellIcon />}
+                      {e.name} <small>({e.category})</small>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <progress value={elapsed} max={total} />
       {track && (
         <div className="track">

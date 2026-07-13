@@ -72,6 +72,57 @@ export function speak(text: string): void {
   }
 }
 
+const ENCOURAGEMENTS = [
+  (n: string) => `Come on ${n}, dig deep!`,
+  (n: string) => `${n}, you've got this!`,
+  (n: string) => `Push it, ${n}!`,
+  (n: string) => `Stay strong, ${n}!`,
+  (n: string) => `Don't quit now, ${n}!`,
+  (n: string) => `Looking powerful, ${n}!`,
+  (n: string) => `Own it, ${n}!`,
+  (n: string) => `Empty the tank, ${n}!`,
+  (n: string) => `Every rep counts, ${n}!`,
+  (n: string) => `Finish strong, ${n}!`,
+  (n: string) => `Dig in, ${n} — don't let up!`,
+  (n: string) => `That's it, ${n}, keep the pace!`,
+  (n: string) => `You're tougher than this, ${n}!`,
+  (n: string) => `Halfway there, ${n} — hold the line!`,
+  (n: string) => `Breathe and drive, ${n}!`,
+  (n: string) => `No easing off now, ${n}!`,
+  (n: string) => `Show me what you've got, ${n}!`,
+  (n: string) => `Strong finish, ${n}, all the way!`,
+  (n: string) => `Leave nothing behind, ${n}!`,
+  (n: string) => `Lock in, ${n} — you can do this!`,
+  (n: string) => `Fire it up, ${n}!`,
+  (n: string) => `Grind it out, ${n}!`,
+  (n: string) => `Proud of you, ${n} — keep going!`,
+  (n: string) => `Chin up, ${n}, power through!`,
+  (n: string) => `Beast mode, ${n}!`,
+  (n: string) => `Unstoppable, ${n} — keep driving!`,
+  (n: string) => `Dig deeper, ${n}, you've got more!`,
+  (n: string) => `Hold nothing back, ${n}!`,
+  (n: string) => `Eyes forward, ${n}, push!`,
+  (n: string) => `Legs strong, ${n} — don't stop!`,
+  (n: string) => `This is your set, ${n}, own it!`,
+  (n: string) => `Come on ${n}, one more gear!`,
+  (n: string) => `Stay in it, ${n}!`,
+  (n: string) => `Crush it, ${n}!`,
+  (n: string) => `You're on fire, ${n}!`,
+  (n: string) => `Keep pounding, ${n}!`,
+  (n: string) => `Almost there, ${n} — finish it!`,
+  (n: string) => `Give it everything, ${n}!`,
+  (n: string) => `Rise up, ${n}!`,
+  (n: string) => `Heart and hustle, ${n}!`,
+  (n: string) => `Make it count, ${n}!`,
+  (n: string) => `Warrior mode, ${n} — go!`,
+  (n: string) => `Set the pace, ${n}!`,
+];
+
+/** A random motivational line aimed at a named person. */
+export function encouragement(name: string): string {
+  return ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)](name);
+}
+
 export function cancelSpeech(): void {
   try {
     window.speechSynthesis?.cancel();

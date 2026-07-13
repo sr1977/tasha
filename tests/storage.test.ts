@@ -8,7 +8,7 @@ vi.stubGlobal('localStorage', {
 
 import { loadPool, loadSettings, savePool, saveSettings } from '../src/storage';
 import { SEED_POOL } from '../src/seed';
-import { DEFAULT_SETTINGS } from '../src/types';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS } from '../src/types';
 
 describe('storage', () => {
   beforeEach(() => store.clear());
@@ -38,11 +38,31 @@ describe('storage', () => {
     expect(loadSettings().stations).toBe(8);
   });
 
-  it('repairs a degenerate stored partner names array', () => {
-    store.set('tasha.settings', JSON.stringify({ partner: { on: true, names: [] } }));
-    expect(loadSettings().partner).toEqual({ on: true, names: ['A', 'B'] });
-    store.set('tasha.settings', JSON.stringify({ partner: { on: true, names: ['a', 'b', 'c', 'd', 'e'] } }));
-    expect(loadSettings().partner!.names).toEqual(['A', 'B']);
+  it('migrates old label-only partner configs to default groups, keeping on/off', () => {
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, names: ['A', 'B'] } }));
+    expect(loadSettings().partner).toEqual(DEFAULT_SETTINGS.partner);
+    store.set('tasha.settings', JSON.stringify({ partner: { on: false, names: ['A', 'B'] } }));
+    expect(loadSettings().partner).toEqual({ on: false, groups: DEFAULT_SETTINGS.partner!.groups });
+  });
+
+  it('rejects out-of-range or malformed group arrays', () => {
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, groups: [] } }));
+    expect(loadSettings().partner!.groups).toEqual(DEFAULT_SETTINGS.partner!.groups);
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, groups: [['x'], 3] } }));
+    expect(loadSettings().partner!.groups).toEqual(DEFAULT_SETTINGS.partner!.groups);
+  });
+
+  it('defaults the roster when missing or malformed', () => {
+    store.set('tasha.settings', JSON.stringify({ roster: 'nope' }));
+    expect(loadSettings().roster).toEqual(DEFAULT_ROSTER);
+  });
+
+  it('keeps a valid stored roster and groups', () => {
+    const partner = { on: true, groups: [['Steve'], ['Amanda']] };
+    store.set('tasha.settings', JSON.stringify({ roster: ['Steve', 'Amanda'], partner }));
+    const s = loadSettings();
+    expect(s.roster).toEqual(['Steve', 'Amanda']);
+    expect(s.partner).toEqual(partner);
   });
 
   it('falls back to seed pool when stored value is JSON null', () => {

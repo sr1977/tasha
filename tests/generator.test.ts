@@ -8,7 +8,7 @@ import {
   replaceInSession,
   banReplacement,
   groupExercises,
-  stationTemplate,
+  stationsForRound,
   spaceDumbbells,
   PREP_SECS,
 } from '../src/generator';
@@ -72,7 +72,7 @@ describe('pickStations', () => {
 
 describe('buildSession', () => {
   const stations = [ex('u1', 'upper'), ex('l1', 'lower')];
-  const session = buildSession(stations, small);
+  const session = buildSession([stations], small);
 
   it('lays out prep, work/rest pairs, roundRest between rounds, no trailing rests', () => {
     expect(session.map((i) => i.kind)).toEqual([
@@ -145,7 +145,7 @@ describe('replaceInSession', () => {
   const a = exp('a', 'upper');
   const b = exp('b', 'lower');
   const z = exp('z', 'upper');
-  const session = buildSession([a, b], { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 });
+  const session = buildSession([[a, b]], { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 });
   // kinds: prep, work(a), rest(->b), work(b), roundRest(->a), work(a), rest(->b), work(b)
 
   it('swaps only intervals after fromIndex', () => {
@@ -182,18 +182,39 @@ describe('banReplacement', () => {
   });
 });
 
-describe('stationTemplate', () => {
+describe('stationsForRound', () => {
   const a = exp('a', 'upper');
   const b = exp('b', 'lower');
   const z = exp('z', 'upper');
 
-  it('returns the stations in order', () => {
-    expect(stationTemplate(buildSession([a, b], small)).map((e) => e.id)).toEqual(['a', 'b']);
+  it('returns a round’s stations in order', () => {
+    expect(stationsForRound(buildSession([[a, b]], small), 1).map((e) => e.id)).toEqual(['a', 'b']);
   });
 
-  it('reflects mid-session replacements (last write wins)', () => {
-    const out = replaceInSession(buildSession([a, b], small), 1, 'a', z);
-    expect(stationTemplate(out).map((e) => e.id)).toEqual(['z', 'b']);
+  it('reflects mid-session replacements per round', () => {
+    const out = replaceInSession(buildSession([[a, b]], small), 1, 'a', z);
+    expect(stationsForRound(out, 1).map((e) => e.id)).toEqual(['a', 'b']); // current round untouched
+    expect(stationsForRound(out, 2).map((e) => e.id)).toEqual(['z', 'b']); // later round swapped
+  });
+});
+
+describe('distinct rounds', () => {
+  const setA = [exp('a', 'upper'), exp('b', 'lower')];
+  const setB = [exp('c', 'core'), exp('d', 'upper')];
+
+  it('cycles the sets across rounds', () => {
+    const works = buildSession([setA, setB], small).filter((i) => i.kind === 'work');
+    expect(works.map((i) => i.exercise!.id)).toEqual(['a', 'b', 'c', 'd']); // round 1 = A, round 2 = B
+  });
+
+  it('roundRest previews the next round’s first station', () => {
+    const rr = buildSession([setA, setB], small).find((i) => i.kind === 'roundRest')!;
+    expect(rr.exercise!.id).toBe('c');
+  });
+
+  it('generateSession makes consecutive rounds differ', () => {
+    const session = generateSession(pool, { ...small, distinctRounds: 2 });
+    expect(stationsForRound(session, 1)).not.toEqual(stationsForRound(session, 2));
   });
 });
 

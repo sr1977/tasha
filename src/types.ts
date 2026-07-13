@@ -24,12 +24,14 @@ export interface Settings {
   stations: number;
   roundRestSecs: number;
   totalMins: number;
+  /** Number of distinct round layouts that cycle across rounds (1 = every round identical). */
+  distinctRounds?: number;
   partner?: PartnerConfig;
   /** All known people, assigned or not. */
   roster?: string[];
 }
 
-export const DEFAULT_ROSTER = ['Steve', 'Amanda', 'Rebecca', 'Kathleen', 'Silki', 'Stew'];
+export const DEFAULT_ROSTER = ['Steve', 'Amanda', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny'];
 
 export const DEFAULT_SETTINGS: Settings = {
   workSecs: 40,
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stations: 6,
   roundRestSecs: 60,
   totalMins: 45,
+  distinctRounds: 2,
   partner: {
     on: true,
     groups: [
