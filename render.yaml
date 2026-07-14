@@ -1,0 +1,17 @@
+# Render Blueprint — deploys Tasha as a free static site.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: tasha
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    # SPA fallback: serve index.html for client-side paths (e.g. Spotify's
+    # /callback redirect) instead of returning 404.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

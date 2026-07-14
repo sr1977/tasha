@@ -1,7 +1,11 @@
 import { loadJson } from './storage';
 
 const CLIENT_ID = '599ca406479846b688274bba8fe50fc8';
-const REDIRECT_URI = 'http://127.0.0.1:6173/callback';
+// Origin-based so it works on both local dev (http://127.0.0.1:6173) and a
+// deployed host (https://<app>.onrender.com). Computed at call time — module
+// import must stay window-free for the node test env. Every origin used must
+// be registered as a redirect URI in the Spotify dashboard.
+const redirectUri = () => `${window.location.origin}/callback`;
 const SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state';
 
 export const WORK_VOLUME = 0.8;
@@ -79,7 +83,7 @@ export async function connect(): Promise<void> {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     response_type: 'code',
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri(),
     scope: SCOPES,
     code_challenge_method: 'S256',
     code_challenge: await challenge(verifier),
@@ -121,7 +125,7 @@ async function exchangeCallback(): Promise<boolean> {
   const auth = await tokenRequest({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri(),
     code_verifier: verifier,
   });
   if (auth) localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
