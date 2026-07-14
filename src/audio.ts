@@ -40,12 +40,25 @@ export function transitionTone(): void {
   tone(1320, 400);
 }
 
-export function speak(text: string): void {
+export interface SpeakOpts {
+  rate?: number;
+  pitch?: number;
+  volume?: number;
+}
+
+// Punchier delivery for the loud moments (work "Go!", encouragements, finish):
+// faster + higher pitch reads as an energetic shout. Volume is already maxed.
+export const SHOUT: SpeakOpts = { rate: 1.15, pitch: 1.3 };
+
+export function speak(text: string, opts: SpeakOpts = {}): void {
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const gen = ++utteranceGen;
     const u = new SpeechSynthesisUtterance(text);
+    if (opts.rate !== undefined) u.rate = opts.rate;
+    if (opts.pitch !== undefined) u.pitch = opts.pitch;
+    if (opts.volume !== undefined) u.volume = opts.volume;
     const voice = pickVoice(listVoices(), getVoiceName());
     if (voice) u.voice = voice;
     // Chrome (especially with Google network voices) sometimes never fires
@@ -72,50 +85,54 @@ export function speak(text: string): void {
   }
 }
 
+// Name flows at the end with no comma before it — the vocative comma makes TTS
+// pause ("Push it, Steve") and sound staccato; "Push it Steve" reads as one line.
 const ENCOURAGEMENTS = [
-  (n: string) => `Come on ${n}, dig deep!`,
-  (n: string) => `${n}, you've got this!`,
-  (n: string) => `Push it, ${n}!`,
-  (n: string) => `Stay strong, ${n}!`,
-  (n: string) => `Don't quit now, ${n}!`,
-  (n: string) => `Looking powerful, ${n}!`,
-  (n: string) => `Own it, ${n}!`,
-  (n: string) => `Empty the tank, ${n}!`,
-  (n: string) => `Every rep counts, ${n}!`,
-  (n: string) => `Finish strong, ${n}!`,
-  (n: string) => `Dig in, ${n} — don't let up!`,
-  (n: string) => `That's it, ${n}, keep the pace!`,
-  (n: string) => `You're tougher than this, ${n}!`,
-  (n: string) => `Halfway there, ${n} — hold the line!`,
-  (n: string) => `Breathe and drive, ${n}!`,
-  (n: string) => `No easing off now, ${n}!`,
-  (n: string) => `Show me what you've got, ${n}!`,
-  (n: string) => `Strong finish, ${n}, all the way!`,
-  (n: string) => `Leave nothing behind, ${n}!`,
-  (n: string) => `Lock in, ${n} — you can do this!`,
-  (n: string) => `Fire it up, ${n}!`,
-  (n: string) => `Grind it out, ${n}!`,
-  (n: string) => `Proud of you, ${n} — keep going!`,
-  (n: string) => `Chin up, ${n}, power through!`,
-  (n: string) => `Beast mode, ${n}!`,
-  (n: string) => `Unstoppable, ${n} — keep driving!`,
-  (n: string) => `Dig deeper, ${n}, you've got more!`,
-  (n: string) => `Hold nothing back, ${n}!`,
-  (n: string) => `Eyes forward, ${n}, push!`,
-  (n: string) => `Legs strong, ${n} — don't stop!`,
-  (n: string) => `This is your set, ${n}, own it!`,
-  (n: string) => `Come on ${n}, one more gear!`,
-  (n: string) => `Stay in it, ${n}!`,
-  (n: string) => `Crush it, ${n}!`,
-  (n: string) => `You're on fire, ${n}!`,
-  (n: string) => `Keep pounding, ${n}!`,
-  (n: string) => `Almost there, ${n} — finish it!`,
-  (n: string) => `Give it everything, ${n}!`,
-  (n: string) => `Rise up, ${n}!`,
-  (n: string) => `Heart and hustle, ${n}!`,
-  (n: string) => `Make it count, ${n}!`,
-  (n: string) => `Warrior mode, ${n} — go!`,
-  (n: string) => `Set the pace, ${n}!`,
+  (n: string) => `Come on ${n}!`,
+  (n: string) => `Dig deep ${n}!`,
+  (n: string) => `You've got this ${n}!`,
+  (n: string) => `Push it ${n}!`,
+  (n: string) => `Stay strong ${n}!`,
+  (n: string) => `Don't quit now ${n}!`,
+  (n: string) => `Looking powerful ${n}!`,
+  (n: string) => `Own it ${n}!`,
+  (n: string) => `Empty the tank ${n}!`,
+  (n: string) => `Every rep counts ${n}!`,
+  (n: string) => `Finish strong ${n}!`,
+  (n: string) => `Dig in ${n}!`,
+  (n: string) => `Keep the pace ${n}!`,
+  (n: string) => `You're tougher than this ${n}!`,
+  (n: string) => `Hold the line ${n}!`,
+  (n: string) => `Breathe and drive ${n}!`,
+  (n: string) => `No easing off ${n}!`,
+  (n: string) => `Show me what you've got ${n}!`,
+  (n: string) => `All the way ${n}!`,
+  (n: string) => `Leave nothing behind ${n}!`,
+  (n: string) => `Lock in ${n}!`,
+  (n: string) => `Fire it up ${n}!`,
+  (n: string) => `Grind it out ${n}!`,
+  (n: string) => `Keep going ${n}!`,
+  (n: string) => `Power through ${n}!`,
+  (n: string) => `Beast mode ${n}!`,
+  (n: string) => `Stay unstoppable ${n}!`,
+  (n: string) => `You've got more ${n}!`,
+  (n: string) => `Hold nothing back ${n}!`,
+  (n: string) => `Eyes forward ${n}!`,
+  (n: string) => `Don't stop ${n}!`,
+  (n: string) => `Own this set ${n}!`,
+  (n: string) => `One more gear ${n}!`,
+  (n: string) => `Stay in it ${n}!`,
+  (n: string) => `Crush it ${n}!`,
+  (n: string) => `You're on fire ${n}!`,
+  (n: string) => `Keep pounding ${n}!`,
+  (n: string) => `Finish it ${n}!`,
+  (n: string) => `Give it everything ${n}!`,
+  (n: string) => `Rise up ${n}!`,
+  (n: string) => `Heart and hustle ${n}!`,
+  (n: string) => `Make it count ${n}!`,
+  (n: string) => `Let's go ${n}!`,
+  (n: string) => `Set the pace ${n}!`,
+  (n: string) => `Bring it home ${n}!`,
 ];
 
 /** A random motivational line aimed at a named person. */

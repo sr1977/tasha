@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer, type TimerState } from '../timer';
-import { beep, cancelSpeech, encouragement, speak, transitionTone } from '../audio';
+import { beep, cancelSpeech, encouragement, SHOUT, speak, transitionTone } from '../audio';
 import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationsForRound } from '../generator';
 import { fmt } from './Setup';
 import { DumbbellIcon } from './DumbbellIcon';
@@ -10,12 +10,14 @@ import { createVoiceControl, voiceSupported } from '../voice';
 
 function announce(state: TimerState, partner?: PartnerConfig): void {
   const iv = state.session[state.index];
+  // Work is the loud moment — shout it; rest/next-up stay calm.
+  const say = (text: string) => speak(text, iv.kind === 'work' ? SHOUT : {});
   if (partner?.on && iv.kind !== 'prep') {
     const count = partner.groups.length;
     if (count >= 3) {
-      if (iv.kind === 'work') speak('Rotate — go!');
-      else if (iv.kind === 'rest') speak('Rest');
-      else speak(`Round ${iv.round + 1} coming up`);
+      if (iv.kind === 'work') say('Rotate — go!');
+      else if (iv.kind === 'rest') say('Rest');
+      else say(`Round ${iv.round + 1} coming up`);
       return;
     }
     // 1-2 groups: named roll call (for count 2 this emits the exact
@@ -25,14 +27,14 @@ function announce(state: TimerState, partner?: PartnerConfig): void {
     const call = groupExercises(stationsForRound(state.session, round), station, count)
       .map((e, i) => `${groupLabel(partner.groups[i], i)}: ${e.name}`)
       .join('. ');
-    speak(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
+    say(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
     return;
   }
-  if (iv.kind === 'work') speak(`${iv.exercise!.name}. Go!`);
+  if (iv.kind === 'work') say(`${iv.exercise!.name}. Go!`);
   else if (iv.kind === 'rest') {
     const cue = iv.exercise!.cue ? ` — ${iv.exercise!.cue}` : '';
-    speak(`Rest. Next up: ${iv.exercise!.name}${cue}`);
-  } else if (iv.kind === 'roundRest') speak(`Round ${iv.round + 1} coming up`);
+    say(`Rest. Next up: ${iv.exercise!.name}${cue}`);
+  } else if (iv.kind === 'roundRest') say(`Round ${iv.round + 1} coming up`);
 }
 
 export function Workout({
@@ -216,7 +218,7 @@ export function Workout({
     if (state.status === 'done') {
       if (prevStatus.current !== 'done') {
         transitionTone();
-        speak('Session complete. Well done!');
+        speak('Session complete. Well done!', SHOUT);
         playerRef.current?.duck();
         prevStatus.current = 'done';
       }
@@ -260,6 +262,7 @@ export function Workout({
           people.length > 0
             ? encouragement(people[Math.floor(Math.random() * people.length)])
             : 'Halfway!',
+          SHOUT,
         );
         playerRef.current?.duck();
       }

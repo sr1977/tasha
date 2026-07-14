@@ -34,8 +34,8 @@ npm install
 npm run dev
 ```
 
-The dev server binds **`http://127.0.0.1:5173`** and uses `strictPort` — if
-5173 is taken it fails loudly rather than drifting to another port. This is
+The dev server binds **`http://127.0.0.1:6173`** and uses `strictPort` — if
+6173 is taken it fails loudly rather than drifting to another port. This is
 deliberate: the Spotify OAuth redirect URI is pinned to that exact address.
 Use `127.0.0.1`, not `localhost` (they are not interchangeable for the OAuth
 redirect on this setup).
@@ -44,7 +44,7 @@ redirect on this setup).
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Dev server at http://127.0.0.1:5173 |
+| `npm run dev` | Dev server at http://127.0.0.1:6173 |
 | `npm run build` | Type-check (`tsc -b`) + production build to `dist/` |
 | `npm run preview` | Serve the built `dist/` locally |
 | `npm run lint` | oxlint |
@@ -67,7 +67,7 @@ public by design (it travels in the authorize URL), so it lives in the source.
 3. Under **Redirect URIs**, add exactly:
 
    ```
-   http://127.0.0.1:5173/callback
+   http://127.0.0.1:6173/callback
    ```
 
    It must match character-for-character — trailing slash, port, and
@@ -86,13 +86,13 @@ const CLIENT_ID = '<your-client-id>';
 The redirect URI and scopes are already set correctly:
 
 ```ts
-const REDIRECT_URI = 'http://127.0.0.1:5173/callback';
+const REDIRECT_URI = 'http://127.0.0.1:6173/callback';
 const SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state';
 ```
 
 ### 3. Authorise from the app
 
-1. `npm run dev`, open http://127.0.0.1:5173.
+1. `npm run dev`, open http://127.0.0.1:6173.
 2. Go to the **Music** panel and click **Connect Spotify**.
 3. You're redirected to Spotify's login/consent page; approve.
 4. Spotify redirects back to `/callback?code=…`; Tasha exchanges the code for
@@ -108,8 +108,8 @@ them. Add playlists by pasting a Spotify playlist URL
 
 | Symptom | Cause / fix |
 |---|---|
-| "INVALID_CLIENT: Invalid redirect URI" | Redirect URI in the dashboard doesn't exactly match `http://127.0.0.1:5173/callback`. |
-| Connect loops / never returns | Dev server not on `127.0.0.1:5173` (check `strictPort` didn't fail). Don't use `localhost`. |
+| "INVALID_CLIENT: Invalid redirect URI" | Redirect URI in the dashboard doesn't exactly match `http://127.0.0.1:6173/callback`. |
+| Connect loops / never returns | Dev server not on `127.0.0.1:6173` (check `strictPort` didn't fail). Don't use `localhost`. |
 | "Spotify Premium is required for playback." | The Web Playback SDK only works with Premium accounts. |
 | Music connects but nothing plays | Device transfer can take 1–3s on first play; check the browser console for `[tasha] spotify` warnings. |
 

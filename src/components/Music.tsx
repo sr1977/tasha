@@ -75,7 +75,7 @@ export function Music() {
         <h2>Music</h2>
         <button onClick={() => void connect()}>Connect Spotify</button>
         <p className="hint">
-          Open the app at http://127.0.0.1:5173 — the Spotify login redirects back there.
+          Open the app at http://127.0.0.1:6173 — the Spotify login redirects back there.
         </p>
       </section>
     );

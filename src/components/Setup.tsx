@@ -45,9 +45,13 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     setSession(buildSession(nextSets, settings));
   };
 
+  // roster = the permanent list of people (survives across sessions). Session
+  // participation is just group membership; the bench is everyone else.
   const roster = settings.roster ?? DEFAULT_ROSTER;
   const groups = settings.partner?.groups ?? [];
   const groupOf = (person: string) => groups.findIndex((g) => g.includes(person));
+  const participants = roster.filter((p) => groupOf(p) >= 0);
+  const bench = roster.filter((p) => groupOf(p) < 0);
   const setGroups = (next: string[][]) =>
     setSettings({ ...settings, partner: { on: true, groups: next } });
 
@@ -56,15 +60,17 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     if (index >= 0) next[index] = [...next[index], person];
     setGroups(next);
   };
+  const removeFromSession = (person: string) => assign(person, -1); // stays on the bench
+  const addToSession = (person: string) => assign(person, 0); // into the first group
   const setGroupCount = (n: number) =>
-    setGroups(Array.from({ length: n }, (_, i) => groups[i] ?? [])); // extra members drop to unassigned
+    setGroups(Array.from({ length: n }, (_, i) => groups[i] ?? [])); // members of dropped groups fall to the bench
   const addPerson = () => {
     const name = newPerson.trim();
     if (!name || roster.includes(name)) return;
-    setSettings({ ...settings, roster: [...roster, name] });
+    setSettings({ ...settings, roster: [...roster, name] }); // to the bench, not yet in the session
     setNewPerson('');
   };
-  const deletePerson = (person: string) =>
+  const deleteFromRoster = (person: string) =>
     setSettings({
       ...settings,
       roster: roster.filter((p) => p !== person),
@@ -139,23 +145,43 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                 ))}
               </select>
             </div>
-            <ul className="roster">
-              {roster.map((person) => (
-                <li key={person}>
-                  <span className="person-name">{person}</span>
-                  <select
-                    value={groupOf(person)}
-                    onChange={(e) => assign(person, Number(e.target.value))}
+            {participants.length > 0 && (
+              <ul className="roster">
+                {participants.map((person) => (
+                  <li key={person}>
+                    <span className="person-name">{person}</span>
+                    <select
+                      value={groupOf(person)}
+                      onChange={(e) => assign(person, Number(e.target.value))}
+                    >
+                      {groups.map((_, i) => (
+                        <option key={i} value={i}>{`Group ${i + 1}`}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => removeFromSession(person)} title="Remove from this session">
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="bench">
+              <span className="bench-label">Not in this session</span>
+              {bench.map((person) => (
+                <span key={person} className="bench-person">
+                  <button onClick={() => addToSession(person)} title="Add to this session">
+                    + {person}
+                  </button>
+                  <button
+                    className="del"
+                    onClick={() => deleteFromRoster(person)}
+                    title="Delete from roster permanently"
                   >
-                    <option value={-1}>Unassigned</option>
-                    {groups.map((_, i) => (
-                      <option key={i} value={i}>{`Group ${i + 1}`}</option>
-                    ))}
-                  </select>
-                  <button onClick={() => deletePerson(person)} title="Remove person">✕</button>
-                </li>
+                    🗑
+                  </button>
+                </span>
               ))}
-              <li className="add-person">
+              <span className="add-person">
                 <input
                   value={newPerson}
                   onChange={(e) => setNewPerson(e.target.value)}
@@ -163,8 +189,8 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                   placeholder="Add a person"
                 />
                 <button onClick={addPerson}>Add</button>
-              </li>
-            </ul>
+              </span>
+            </div>
             <ol className="group-preview">
               {groups.map((g, i) => (
                 <li key={i}>{groupLabel(g, i)}</li>

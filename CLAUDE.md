@@ -3,7 +3,7 @@
 Personal circuit-training timer. Vite + React + TypeScript, no backend;
 localStorage persistence; Spotify Web Playback SDK from CDN (no npm dep).
 Tests in `tests/` (Vitest, `npm test`). Dev server must run at
-http://127.0.0.1:5173 (Spotify OAuth redirect; strictPort).
+http://127.0.0.1:6173 (Spotify OAuth redirect; strictPort).
 
 Commits: plain conventional style — never any AI attribution.
 

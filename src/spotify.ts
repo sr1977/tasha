@@ -1,7 +1,7 @@
 import { loadJson } from './storage';
 
 const CLIENT_ID = '599ca406479846b688274bba8fe50fc8';
-const REDIRECT_URI = 'http://127.0.0.1:5173/callback';
+const REDIRECT_URI = 'http://127.0.0.1:6173/callback';
 const SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state';
 
 export const WORK_VOLUME = 0.8;

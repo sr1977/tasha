@@ -231,7 +231,44 @@ select {
   min-width: 6rem;
   font-weight: 600;
 }
-.roster .add-person input {
+.bench {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+.bench-label {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bench-person {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+}
+.bench-person button {
+  border: none;
+  background: transparent;
+}
+.bench-person .del {
+  border-left: 1px solid var(--line);
+  padding-inline: 0.5em;
+  opacity: 0.55;
+}
+.bench-person .del:hover {
+  opacity: 1;
+}
+.add-person {
+  display: inline-flex;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 11rem;
+}
+.add-person input {
   flex: 1;
 }
 .group-preview {
