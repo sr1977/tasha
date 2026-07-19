@@ -2,6 +2,9 @@
 
 Personal circuit-training timer. Vite + React + TypeScript, no backend;
 localStorage persistence; Spotify Web Playback SDK from CDN (no npm dep).
+Coach voice: Google Cloud TTS (Chirp 3: HD) when `VITE_GOOGLE_TTS_KEY` is set
+in `.env.local` (gitignored; referrer-restricted key), cached per phrase in
+the Cache API; falls back to `speechSynthesis` when absent or offline.
 Tests in `tests/` (Vitest, `npm test`). Dev server must run at
 http://127.0.0.1:6173 (Spotify OAuth redirect; strictPort).
 

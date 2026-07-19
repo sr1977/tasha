@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Session, type Settings } from '../types';
 import { banReplacement, buildSession, generateSession, groupLabel, roundCount, sessionDuration, stationsForRound } from '../generator';
-import { getVoiceName, listVoices, setVoiceName, speak } from '../audio';
+import {
+  getGoogleVoice,
+  getVoiceName,
+  GOOGLE_VOICES,
+  googleTtsActive,
+  listVoices,
+  setGoogleVoice,
+  setVoiceName,
+  speak,
+} from '../audio';
 import { DumbbellIcon } from './DumbbellIcon';
 import { Music } from './Music';
 
@@ -23,6 +32,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
   const [newPerson, setNewPerson] = useState('');
   const [voices, setVoices] = useState(listVoices);
   const [voiceName, setVoiceNameState] = useState<string>(() => getVoiceName() ?? '');
+  const [googleVoice, setGoogleVoiceState] = useState<string>(getGoogleVoice);
   useEffect(() => {
     const refresh = () => setVoices(listVoices());
     refresh(); // voices often load async after first paint
@@ -203,23 +213,40 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
             )}
           </>
         )}
-        {voices.length > 0 && (
+        {(voices.length > 0 || googleTtsActive()) && (
           <div className="voice-row">
-            <label>
-              Coach voice
-              <select
-                value={voiceName}
-                onChange={(e) => {
-                  setVoiceNameState(e.target.value);
-                  setVoiceName(e.target.value);
-                }}
-              >
-                <option value="">Default (auto)</option>
-                {voices.map((v) => (
-                  <option key={v.name} value={v.name}>{v.name}</option>
-                ))}
-              </select>
-            </label>
+            {googleTtsActive() ? (
+              <label>
+                Coach voice
+                <select
+                  value={googleVoice}
+                  onChange={(e) => {
+                    setGoogleVoiceState(e.target.value);
+                    setGoogleVoice(e.target.value);
+                  }}
+                >
+                  {GOOGLE_VOICES.map((v) => (
+                    <option key={v.name} value={v.name}>{v.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                Coach voice
+                <select
+                  value={voiceName}
+                  onChange={(e) => {
+                    setVoiceNameState(e.target.value);
+                    setVoiceName(e.target.value);
+                  }}
+                >
+                  <option value="">Default (auto)</option>
+                  {voices.map((v) => (
+                    <option key={v.name} value={v.name}>{v.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button onClick={() => speak('Next up: squats — drive through the heels')} title="Test the voice">
               ▶ Test
             </button>
