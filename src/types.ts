@@ -31,7 +31,7 @@ export interface Settings {
   roster?: string[];
 }
 
-export const DEFAULT_ROSTER = ['Steve', 'Amanda', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny'];
+export const DEFAULT_ROSTER = ['Steve', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny'];
 
 export const DEFAULT_SETTINGS: Settings = {
   workSecs: 40,
@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   partner: {
     on: true,
     groups: [
-      ['Steve', 'Amanda', 'Rebecca'],
+      ['Steve', 'Rebecca'],
       ['Kathleen', 'Silki', 'Stew'],
     ],
   },
