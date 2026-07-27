@@ -2,3 +2,9 @@ node_modules/
 dist/
 .playwright-mcp/
 .env.local
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
