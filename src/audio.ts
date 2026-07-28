@@ -1,5 +1,6 @@
 let ctx: AudioContext | null = null;
-let speechListener: ((speaking: boolean) => void) | null = null;
+const speechListeners = new Set<(speaking: boolean) => void>();
+const speechListener = (speaking: boolean) => speechListeners.forEach((cb) => cb(speaking));
 let utteranceGen = 0;
 
 export function initAudio(): void {
@@ -12,11 +13,11 @@ export function initAudio(): void {
 }
 
 export function onSpeaking(cb: (speaking: boolean) => void): void {
-  speechListener = cb;
+  speechListeners.add(cb);
 }
 
 export function offSpeaking(cb: (speaking: boolean) => void): void {
-  if (speechListener === cb) speechListener = null;
+  speechListeners.delete(cb);
 }
 
 function tone(freq: number, ms: number): void {
@@ -128,7 +129,7 @@ function stopPlayback(): void {
     currentAudio.pause();
     currentAudio = null;
   }
-  speechListener?.(false);
+  speechListener(false);
 }
 
 export function speak(text: string, opts: SpeakOpts = {}): void {
@@ -148,19 +149,23 @@ export function speak(text: string, opts: SpeakOpts = {}): void {
       const a = new Audio(url);
       currentAudio = a;
       if (opts.volume !== undefined) a.volume = opts.volume;
-      const failsafe = setTimeout(
-        () => {
-          if (gen === utteranceGen) speechListener?.(false);
-        },
-        Math.min(10_000, 1000 + text.length * 90),
-      );
+      const expire = () => {
+        if (gen === utteranceGen) speechListener(false);
+      };
+      // Guesswork from character count used to expire mid-sentence and let the
+      // music back up; the clip's own duration is the truth once metadata lands.
+      let failsafe = setTimeout(expire, 20_000);
+      a.onloadedmetadata = () => {
+        clearTimeout(failsafe);
+        if (Number.isFinite(a.duration)) failsafe = setTimeout(expire, a.duration * 1000 + 2000);
+      };
       const release = () => {
         clearTimeout(failsafe);
         URL.revokeObjectURL(url);
-        if (gen === utteranceGen) speechListener?.(false);
+        expire();
       };
       a.onplay = () => {
-        if (gen === utteranceGen) speechListener?.(true);
+        if (gen === utteranceGen) speechListener(true);
       };
       a.onended = release;
       a.onerror = release;
@@ -187,18 +192,20 @@ function speakLocal(text: string, opts: SpeakOpts = {}): void {
     // Chrome (especially with Google network voices) sometimes never fires
     // end/error for an utterance. Without a failsafe the speaking=true latch
     // would mute voice recognition permanently.
+    // No duration API here, so estimate generously — firing early would fade the
+    // music up mid-sentence; firing late costs a moment of quiet music.
     const failsafe = setTimeout(
       () => {
-        if (gen === utteranceGen) speechListener?.(false);
+        if (gen === utteranceGen) speechListener(false);
       },
-      Math.min(10_000, 1000 + text.length * 90),
+      Math.min(25_000, 2000 + text.length * 130),
     );
     const release = () => {
       clearTimeout(failsafe);
-      if (gen === utteranceGen) speechListener?.(false);
+      if (gen === utteranceGen) speechListener(false);
     };
     u.onstart = () => {
-      if (gen === utteranceGen) speechListener?.(true);
+      if (gen === utteranceGen) speechListener(true);
     };
     u.onend = release;
     u.onerror = release;
@@ -220,7 +227,7 @@ const ENCOURAGEMENTS = [
   (n: string) => `Looking powerful ${n}!`,
   (n: string) => `Own it ${n}!`,
   (n: string) => `Empty the tank ${n}!`,
-  (n: string) => `Every rep counts ${n}!`,
+  (n: string) => `Every repetition counts ${n}!`,
   (n: string) => `Finish strong ${n}!`,
   (n: string) => `Dig in ${n}!`,
   (n: string) => `Keep the pace ${n}!`,
@@ -261,6 +268,113 @@ const ENCOURAGEMENTS = [
 /** A random motivational line aimed at a named person. */
 export function encouragement(name: string): string {
   return ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)](name);
+}
+
+// Drill-sergeant jabs — parade-ground bark, British seasoning, household-safe.
+const JABS = [
+  (n: string) => `${n}! You call that effort? My nan hits harder and she's DECEASED!`,
+  (n: string) => `Move it, ${n}! You're slower than a Sunday bus replacement service!`,
+  (n: string) => `${n}, are you tired? Tired is a STATE OF MIND — now SHIFT!`,
+  (n: string) => `Oh, I'm sorry ${n}, did I interrupt your ELEVENSES?`,
+  (n: string) => `${n}! I've seen pond scum with more fight in it!`,
+  (n: string) => `What in the name of the King was THAT, ${n}?`,
+  (n: string) => `${n}, you'd better unscrew your head and screw it back on RIGHT!`,
+  (n: string) => `Is that sweat, ${n}, or are you just CRYING?`,
+  (n: string) => `${n}! The only thing you're working hard at is DISAPPOINTING me!`,
+  (n: string) => `Pick it up, ${n}! This isn't a garden fete, PRINCESS!`,
+  (n: string) => `${n}, I have seen shop dummies with better form — and they're PLASTIC!`,
+  (n: string) => `Start moving, ${n}, or I will PERSONALLY march you to the car park!`,
+  (n: string) => `${n}! You're moving like the back end of a pantomime horse!`,
+  (n: string) => `Do you need a WRITTEN INVITATION, ${n}? SHIFT!`,
+  (n: string) => `${n}, if lazing about was an Olympic sport you'd bring home GOLD!`,
+  (n: string) => `I've seen snails lap you TWICE, ${n}!`,
+  (n: string) => `${n}! Stop faffing about before I make faffing ILLEGAL!`,
+  (n: string) => `Outstanding, ${n} — outstandingly PATHETIC! Now GO!`,
+  (n: string) => `${n}, you move like you're wading through cold PORRIDGE!`,
+  (n: string) => `Lock it in, ${n}! The queue at the post office moves faster than you!`,
+];
+
+// Stand-in targets when no roster name is available (solo mode).
+const VOCATIVES = ['sunshine', 'princess', 'champ', 'sleeping beauty', 'your majesty', 'buttercup'];
+
+/** A random playful insult aimed at a named person (or a cheeky stand-in). */
+export function jab(name?: string): string {
+  const n = name ?? VOCATIVES[Math.floor(Math.random() * VOCATIVES.length)];
+  return JABS[Math.floor(Math.random() * JABS.length)](n);
+}
+
+// Mid-set halfway shouts — pure enthusiasm, no name needed (solo mode).
+const HALFWAY_SHOUTS = [
+  "HALFWAY! You are ON FIRE — light it up!",
+  "Yes! Halfway down and you look UNSTOPPABLE!",
+  "Halfway! This is YOUR moment — take it!",
+  "Boom — halfway! You're stronger than you know — prove it!",
+  "Halfway there and you are CRUSHING it — keep flying!",
+  "Halfway! I love what I'm seeing — give me MORE!",
+  "You're over the top — this back half belongs to YOU!",
+  "Halfway home — you were BUILT for this — unleash it!",
+  "Second half, best half — show me something LEGENDARY!",
+  "HALFWAY! Every repetition from here makes you a champion — GO!",
+];
+
+/** A random high-energy halfway shout for solo mode. */
+export function halfwayShout(): string {
+  return HALFWAY_SHOUTS[Math.floor(Math.random() * HALFWAY_SHOUTS.length)];
+}
+
+// Generic mid-set push shouts — no positional wording, fire anywhere in a set.
+const PUSH_SHOUTS = [
+  "Keep that pace UP!",
+  "Strong! Stay strong!",
+  "Drive! Drive! Drive!",
+  "Don't you dare slow down!",
+  "Big effort — right NOW!",
+  "Push! You've got plenty left!",
+  "Faster! Harder! GO!",
+  "That's it — keep it burning!",
+  "Attack it! ATTACK it!",
+  "Full gas — no coasting!",
+  "Squeeze every second!",
+  "Finish STRONG!",
+];
+
+/** A random position-agnostic push shout. */
+export function pushShout(): string {
+  return PUSH_SHOUTS[Math.floor(Math.random() * PUSH_SHOUTS.length)];
+}
+
+// Witty warm-up jibes — one per warm-up move, promising pain to come.
+const WARMUP_JIBES = [
+  "Enjoy this bit — it's the last easy thing happening today!",
+  "Limber up, I have PLANS for you lot!",
+  "This is the calm before MY storm!",
+  "Loosen those limbs — I intend to USE them!",
+  "Savour it — in ten minutes you'll be dreaming of warm-ups!",
+  "I hope you had your porridge, you're going to need it!",
+  "Warm muscles, zero excuses — that's the deal!",
+  "Get that blood moving — where you're going, you'll want it!",
+];
+
+export type CalloutSlot = 'early' | 'halfway' | 'late';
+const CALLOUT_SLOTS: CalloutSlot[] = ['early', 'halfway', 'late'];
+
+/**
+ * Which moments of a work set get a shout-out. All three turns the coach into a
+ * running commentary, so a set gets one — two once it's long enough to carry it
+ * — drawn at random so no single moment is always the one that speaks.
+ */
+export function pickCalloutSlots(secs: number, rand: () => number = Math.random): CalloutSlot[] {
+  const a = [...CALLOUT_SLOTS];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, secs >= 40 ? 2 : 1);
+}
+
+/** A random warm-up jibe about the hard work coming. */
+export function warmupJibe(): string {
+  return WARMUP_JIBES[Math.floor(Math.random() * WARMUP_JIBES.length)];
 }
 
 export function cancelSpeech(): void {

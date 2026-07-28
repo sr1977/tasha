@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Exercise, Session, Settings } from './types';
-import { loadPool, loadSettings, savePool, saveSettings } from './storage';
+import { loadPool, loadSession, loadSettings, savePool, saveSession, saveSettings } from './storage';
 import { initAudio } from './audio';
 import { handleCallback } from './spotify';
 import { Logo } from './components/Logo';
@@ -22,7 +22,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('setup');
   const [pool, setPoolState] = useState<Exercise[]>(loadPool);
   const [settings, setSettingsState] = useState<Settings>(loadSettings);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSessionState] = useState<Session | null>(loadSession);
+  // Locked-in session: persists across refresh until regenerated/invalidated.
+  const setSession = (s: Session | null) => {
+    setSessionState(s);
+    saveSession(s);
+  };
 
   const setPool = (p: Exercise[]) => {
     setPoolState(p);
@@ -32,7 +37,9 @@ export default function App() {
   const setSettings = (s: Settings) => {
     setSettingsState(s);
     saveSettings(s);
-    setSession(null); // settings changed -> stale session invalidated
+    // The nasty dial doesn't affect session layout — keep the locked session.
+    const layoutChanged = JSON.stringify({ ...s, nasty: 0 }) !== JSON.stringify({ ...settings, nasty: 0 });
+    if (layoutChanged) setSession(null); // settings changed -> stale session invalidated
   };
 
   const banExercise = (banned: Exercise) => {
@@ -50,6 +57,8 @@ export default function App() {
         pool={pool}
         onBan={banExercise}
         partner={settings.partner}
+        roster={settings.roster}
+        nasty={settings.nasty ?? 0.25}
         onExit={() => setScreen('setup')}
       />
     );

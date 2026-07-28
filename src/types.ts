@@ -1,5 +1,7 @@
 export type Category = 'upper' | 'lower' | 'core';
-export type Equipment = 'bodyweight' | 'dumbbells';
+// Anything that isn't bodyweight is shared kit: the household owns one set, so
+// the generator never runs two stations needing the same kind at once.
+export type Equipment = 'bodyweight' | 'dumbbells' | 'medicine ball';
 
 export type Pref = 'fav' | 'ban';
 
@@ -26,6 +28,10 @@ export interface Settings {
   totalMins: number;
   /** Number of distinct round layouts that cycle across rounds (1 = every round identical). */
   distinctRounds?: number;
+  /** 0–1: chance the late-set callout is a drill-sergeant jab instead of encouragement. */
+  nasty?: number;
+  /** Categories the work stations draw from. Undefined, empty or all = everything. */
+  focus?: Category[];
   partner?: PartnerConfig;
   /** All known people, assigned or not. */
   roster?: string[];
@@ -40,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   roundRestSecs: 60,
   totalMins: 45,
   distinctRounds: 2,
+  nasty: 0.25,
   partner: {
     on: true,
     groups: [
@@ -50,7 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   roster: DEFAULT_ROSTER,
 };
 
-export type IntervalKind = 'prep' | 'work' | 'rest' | 'roundRest';
+export type IntervalKind = 'prep' | 'warmup' | 'work' | 'rest' | 'roundRest' | 'cooldown';
 
 export interface SessionInterval {
   kind: IntervalKind;

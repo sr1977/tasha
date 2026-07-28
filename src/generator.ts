@@ -2,7 +2,37 @@ import type { Category, Exercise, Session, Settings } from './types';
 
 export const PREP_SECS = 10;
 
-const CATEGORY_ORDER: Category[] = ['upper', 'lower', 'core'];
+// Fixed warm-up block: 5 moves × 15s + a 20s breather before round 1 — capped
+// at 2 minutes all-in.
+export const WARMUP_SECS = 15;
+export const WARMUP_GAP_SECS = 20;
+export const WARMUP_MOVES: Exercise[] = [
+  { id: 'wu-jog', name: 'Jogging on the spot', category: 'lower', equipment: 'bodyweight' },
+  { id: 'wu-heel', name: 'Heel kicks', category: 'lower', equipment: 'bodyweight' },
+  { id: 'wu-star', name: 'Star jumps', category: 'lower', equipment: 'bodyweight' },
+  { id: 'wu-toe', name: 'Toe touches', category: 'core', equipment: 'bodyweight', cue: 'opposite arm to opposite toe' },
+  { id: 'wu-arms', name: 'Arm rotations', category: 'upper', equipment: 'bodyweight', cue: 'backwards, then forwards' },
+];
+
+// Fixed cool-down block: a 20s "great work" breather, then 4 stretches × 20s —
+// capped at 2 minutes all-in.
+export const COOLDOWN_SECS = 20;
+export const COOLDOWN_GAP_SECS = 20;
+export const COOLDOWN_GAP: Exercise = {
+  id: 'cd-gap',
+  name: 'Great work!',
+  category: 'core',
+  equipment: 'bodyweight',
+  cue: 'catch your breath — cool-down coming up',
+};
+export const COOLDOWN_MOVES: Exercise[] = [
+  { id: 'cd-ham', name: 'Hamstring stretch', category: 'lower', equipment: 'bodyweight', cue: 'each leg' },
+  { id: 'cd-calf', name: 'Calf stretch', category: 'lower', equipment: 'bodyweight', cue: 'each leg' },
+  { id: 'cd-behind', name: 'Arm behind your back', category: 'upper', equipment: 'bodyweight', cue: 'each arm' },
+  { id: 'cd-across', name: 'Arm across your chest', category: 'upper', equipment: 'bodyweight', cue: 'each arm' },
+];
+
+export const CATEGORY_ORDER: Category[] = ['upper', 'lower', 'core'];
 
 export function roundCount(s: Settings): number {
   const roundLength = s.stations * (s.workSecs + s.restSecs) + s.roundRestSecs;
@@ -16,6 +46,17 @@ function shuffle<T>(items: T[], rand: () => number): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+/**
+ * Narrow the pool to the focused categories. Undefined, empty or all-three mean
+ * everything — and a focus that matches nothing falls back to the whole pool,
+ * since a full-body session beats no session at all.
+ */
+export function focusPool(pool: Exercise[], focus?: Category[]): Exercise[] {
+  if (!focus || focus.length === 0 || focus.length >= CATEGORY_ORDER.length) return pool;
+  const kept = pool.filter((e) => focus.includes(e.category));
+  return kept.length > 0 ? kept : pool;
 }
 
 export function pickStations(
@@ -55,6 +96,12 @@ export function pickStations(
 export function buildSession(sets: Exercise[][], s: Settings): Session {
   const rounds = roundCount(s);
   const session: Session = [{ kind: 'prep', duration: PREP_SECS, round: 1, station: 0 }];
+  for (const m of WARMUP_MOVES) {
+    session.push({ kind: 'warmup', exercise: m, duration: WARMUP_SECS, round: 1, station: 0 });
+  }
+  // Breather between warm-up and the first station (a normal rest interval, so
+  // it announces/previews the first exercise like any other rest).
+  session.push({ kind: 'rest', exercise: sets[0][0], duration: WARMUP_GAP_SECS, round: 1, station: 0 });
   for (let r = 1; r <= rounds; r++) {
     const stations = sets[(r - 1) % sets.length];
     stations.forEach((exercise, i) => {
@@ -79,47 +126,64 @@ export function buildSession(sets: Exercise[][], s: Settings): Session {
       });
     }
   }
+  session.push({ kind: 'cooldown', exercise: COOLDOWN_GAP, duration: COOLDOWN_GAP_SECS, round: rounds, station: 0 });
+  for (const m of COOLDOWN_MOVES) {
+    session.push({ kind: 'cooldown', exercise: m, duration: COOLDOWN_SECS, round: rounds, station: 0 });
+  }
   return session;
 }
 
-// Groups rotate on offset stations sharing one set of dumbbells, so any window
-// of `count` consecutive stations (the ones worked at the same moment) may hold
-// at most one dumbbell exercise. Reorder the picks to space dumbbells `count`
-// apart, swapping surplus dumbbells for pool bodyweight when there are too many
-// to space at all (> floor(n/count)).
-export function spaceDumbbells(
+// Groups rotate on offset stations sharing one set of kit, so any window of
+// `count` consecutive stations (the ones worked at the same moment) may hold at
+// most one exercise per shared-equipment kind. Kinds are independent — the
+// dumbbells and the medicine ball can run side by side, just not with
+// themselves. Reorder the picks to space each kind `count` apart, swapping the
+// surplus for pool bodyweight when a kind has more than floor(n/count) picks.
+export function spaceEquipment(
   picks: Exercise[],
   pool: Exercise[],
   count: number,
   rand: () => number = Math.random,
 ): Exercise[] {
   const n = picks.length;
-  const isDb = (e: Exercise) => e.equipment === 'dumbbells';
+  const shared = (e: Exercise) => e.equipment !== 'bodyweight';
   if (count <= 1 || n === 0) return picks;
 
-  const maxD = Math.floor(n / count);
-  const dumbbells = picks.filter(isDb);
-  const body = picks.filter((e) => !isDb(e));
+  const maxPerKind = Math.floor(n / count);
+  const body = picks.filter((e) => !shared(e));
+  const byKind = [...new Set(picks.filter(shared).map((e) => e.equipment))].map((k) =>
+    picks.filter((e) => e.equipment === k),
+  );
 
-  if (dumbbells.length > maxD) {
-    const used = new Set(picks.map((e) => e.id));
-    const spare = shuffle(
-      pool.filter((e) => !isDb(e) && e.pref !== 'ban' && !used.has(e.id)),
-      rand,
-    );
-    while (dumbbells.length > maxD && spare.length > 0) {
-      const dropped = dumbbells.pop()!;
+  // Only built if something actually has to be swapped out — it consumes `rand`.
+  let spare: Exercise[] | null = null;
+  for (const kind of byKind) {
+    while (kind.length > maxPerKind) {
+      spare ??= shuffle(
+        pool.filter((e) => !shared(e) && e.pref !== 'ban' && !picks.some((p) => p.id === e.id)),
+        rand,
+      );
+      if (spare.length === 0) break;
+      const dropped = kind.pop()!;
       const i = spare.findIndex((e) => e.category === dropped.category);
       body.push(spare.splice(i >= 0 ? i : 0, 1)[0]);
     }
-    // ponytail: if the pool lacks enough bodyweight moves we keep the leftover
-    // dumbbells and just space them as evenly as n allows below.
+    // ponytail: if the pool lacks enough bodyweight moves we keep the leftovers
+    // and just space them as evenly as n allows below.
   }
 
-  const d = dumbbells.length;
+  // Biggest kind first — it has the least room to fit around the others.
+  byKind.sort((a, b) => b.length - a.length);
   const slots: (Exercise | null)[] = new Array(n).fill(null);
-  const gap = d > 0 ? n / d : 0; // >= count once d <= maxD
-  for (let i = 0; i < d; i++) slots[Math.floor(i * gap)] = dumbbells[i];
+  for (const kind of byKind) {
+    let last = -count; // leaves slot 0 available to the first pick
+    for (const e of kind) {
+      let i = slots.findIndex((s, idx) => s === null && idx >= last + count);
+      if (i < 0) i = slots.indexOf(null); // too tight to space: best effort
+      slots[i] = e;
+      last = i;
+    }
+  }
   let bi = 0;
   for (let i = 0; i < n; i++) if (slots[i] === null) slots[i] = body[bi++];
   return slots as Exercise[];
@@ -127,7 +191,7 @@ export function spaceDumbbells(
 
 // Build `numSets` distinct station sets by picking them all in one balanced
 // pass, then slicing — consecutive slices draw different exercises per category,
-// so the rounds vary. Each set is dumbbell-spaced independently.
+// so the rounds vary. Each set is equipment-spaced independently.
 export function pickRoundSets(
   pool: Exercise[],
   stationsPerRound: number,
@@ -137,7 +201,7 @@ export function pickRoundSets(
 ): Exercise[][] {
   const all = pickStations(pool, stationsPerRound * numSets, rand);
   return Array.from({ length: numSets }, (_, k) =>
-    spaceDumbbells(all.slice(k * stationsPerRound, (k + 1) * stationsPerRound), pool, count, rand),
+    spaceEquipment(all.slice(k * stationsPerRound, (k + 1) * stationsPerRound), pool, count, rand),
   );
 }
 
@@ -148,7 +212,9 @@ export function generateSession(
 ): Session {
   const count = s.partner?.on ? s.partner.groups.length : 1;
   const numSets = Math.max(1, Math.min(s.distinctRounds ?? 1, roundCount(s)));
-  return buildSession(pickRoundSets(pool, s.stations, numSets, count, rand), s);
+  // Work stations only — the warm-up and cool-down stay full-body whatever the focus.
+  const focused = focusPool(pool, s.focus);
+  return buildSession(pickRoundSets(focused, s.stations, numSets, count, rand), s);
 }
 
 export function sessionDuration(session: Session): number {

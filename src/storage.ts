@@ -1,8 +1,9 @@
-import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Settings } from './types';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Session, type Settings } from './types';
 import { SEED_POOL } from './seed';
 
 const POOL_KEY = 'tasha.pool';
 const SETTINGS_KEY = 'tasha.settings';
+const SESSION_KEY = 'tasha.session';
 
 export function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -13,15 +14,45 @@ export function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
+/**
+ * How many SEED_POOL entries this saved pool has already been offered. New seed
+ * exercises are appended to the end of the list, so anything past the mark is an
+ * addition the pool has never seen — and anything before it was seen and maybe
+ * deliberately deleted, so it stays gone.
+ */
+const SEED_MARK_KEY = 'tasha.seedMerged';
+
+// Pools saved before the mark existed: infer it from the highest seed-N they
+// hold. Deleting the newest seed exercise then upgrading brings that one back —
+// the alternative is never delivering new exercises at all.
+function inferSeedMark(pool: Exercise[]): number {
+  return pool.reduce((max, e) => {
+    const m = /^seed-(\d+)$/.exec(e.id);
+    return m ? Math.max(max, Number(m[1]) + 1) : max;
+  }, 0);
+}
+
 export function loadPool(): Exercise[] {
-  const parsed = loadJson<unknown>(POOL_KEY, SEED_POOL);
-  if (!Array.isArray(parsed)) return SEED_POOL;
+  const parsed = loadJson<unknown>(POOL_KEY, null);
+  if (!Array.isArray(parsed)) {
+    localStorage.setItem(SEED_MARK_KEY, String(SEED_POOL.length));
+    return SEED_POOL;
+  }
   // Cardio was dropped — filter it out of pools saved before the change.
-  return (parsed as Exercise[]).filter((e) => (e.category as string) !== 'cardio');
+  const pool = (parsed as Exercise[]).filter((e) => (e.category as string) !== 'cardio');
+  const stored = localStorage.getItem(SEED_MARK_KEY);
+  const mark = stored === null ? inferSeedMark(pool) : Number(stored) || 0;
+  if (mark >= SEED_POOL.length) return pool;
+  // Persist straight away: the mark may only advance once the merge is durable,
+  // or a load-without-save would lose the additions and never offer them again.
+  const merged = [...pool, ...SEED_POOL.slice(mark)];
+  savePool(merged);
+  return merged;
 }
 
 export function savePool(pool: Exercise[]): void {
   localStorage.setItem(POOL_KEY, JSON.stringify(pool));
+  localStorage.setItem(SEED_MARK_KEY, String(SEED_POOL.length));
 }
 
 export function loadSettings(): Settings {
@@ -46,4 +77,15 @@ export function loadSettings(): Settings {
 
 export function saveSettings(s: Settings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+/** The generated (locked-in) session, so a reload doesn't lose it. */
+export function loadSession(): Session | null {
+  const parsed = loadJson<unknown>(SESSION_KEY, null);
+  return Array.isArray(parsed) && parsed.length > 0 ? (parsed as Session) : null;
+}
+
+export function saveSession(s: Session | null): void {
+  if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  else localStorage.removeItem(SESSION_KEY);
 }

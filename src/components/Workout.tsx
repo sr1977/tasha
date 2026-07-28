@@ -1,56 +1,44 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
-import { initTimer, timerReducer, type TimerState } from '../timer';
-import { beep, cancelSpeech, encouragement, SHOUT, speak, transitionTone } from '../audio';
+import { initTimer, timerReducer } from '../timer';
+import { beep, cancelSpeech, type CalloutSlot, encouragement, halfwayShout, jab, offSpeaking, onSpeaking, pickCalloutSlots, pushShout, SHOUT, speak, transitionTone, warmupJibe } from '../audio';
+import { announcementText } from '../coach';
 import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationsForRound } from '../generator';
 import { fmt } from './Setup';
-import { DumbbellIcon } from './DumbbellIcon';
+import { EquipmentIcon } from './EquipmentIcon';
 import { activePlaylist, cooldownPlaylist, createPlayer, DIP_VOLUME, WORK_VOLUME, type PlayerHandle } from '../spotify';
 import { createVoiceControl, voiceSupported } from '../voice';
 
-function announce(state: TimerState, partner?: PartnerConfig): void {
-  const iv = state.session[state.index];
-  // Work is the loud moment — shout it; rest/next-up stay calm.
-  const say = (text: string) => speak(text, iv.kind === 'work' ? SHOUT : {});
-  if (partner?.on && iv.kind !== 'prep') {
-    const count = partner.groups.length;
-    if (count >= 3) {
-      if (iv.kind === 'work') say('Rotate — go!');
-      else if (iv.kind === 'rest') say('Rest');
-      else say(`Round ${iv.round + 1} coming up`);
-      return;
-    }
-    // 1-2 groups: named roll call (for count 2 this emits the exact
-    // pre-group-mode strings). roundRest previews the next round's set.
-    const round = iv.kind === 'roundRest' ? iv.round + 1 : iv.round;
-    const station = iv.kind === 'work' ? iv.station : iv.kind === 'rest' ? iv.station + 1 : 1;
-    const call = groupExercises(stationsForRound(state.session, round), station, count)
-      .map((e, i) => `${groupLabel(partner.groups[i], i)}: ${e.name}`)
-      .join('. ');
-    say(iv.kind === 'work' ? `${call}. Go!` : `Next — ${call}`);
-    return;
-  }
-  if (iv.kind === 'work') say(`${iv.exercise!.name}. Go!`);
-  else if (iv.kind === 'rest') {
-    const cue = iv.exercise!.cue ? ` — ${iv.exercise!.cue}` : '';
-    say(`Rest. Next up: ${iv.exercise!.name}${cue}`);
-  } else if (iv.kind === 'roundRest') say(`Round ${iv.round + 1} coming up`);
-}
+// How often a mid-set callout is aimed at someone by name instead of a generic
+// shout. Hearing your own name mid-set is the point of keeping a roster; the
+// remainder keeps her from sounding like a register being read out.
+const NAME_RATE = 0.85;
 
 export function Workout({
   session,
   pool,
   onBan,
   partner,
+  roster = [],
+  nasty = 0.25,
   onExit,
 }: {
   session: Session;
   pool: Exercise[];
   onBan: (e: Exercise) => void;
   partner?: PartnerConfig;
+  /** Everyone known, used to name people when group mode is off. */
+  roster?: string[];
+  /** 0–1: chance the late-set callout is a jab instead of encouragement. */
+  nasty?: number;
   onExit: () => void;
 }) {
   const [state, dispatch] = useReducer(timerReducer, session, initTimer);
+
+  // Who Tasha shouts at by name. Group mode makes the bench explicit, so only
+  // the assigned people count; without it the roster is the best answer we have
+  // — a solo session should still hear a name, not "buttercup".
+  const people = partner?.on ? partner.groups.flat() : roster;
 
   const playerRef = useRef<PlayerHandle | null>(null);
   const [track, setTrack] = useState<string | null>(null);
@@ -62,6 +50,7 @@ export function Workout({
   statusRef.current = state.status;
   const kindRef = useRef(state.session[state.index].kind);
   kindRef.current = state.session[state.index].kind;
+  const cooldownStartedRef = useRef(false); // cool-down playlist already started
 
   const ban = () => {
     const iv = state.session[state.index];
@@ -131,7 +120,9 @@ export function Workout({
       p.resume();
     } else if (state.status === 'done') {
       const cd = cooldownPlaylist();
-      if (cd) {
+      if (cd && cooldownStartedRef.current) {
+        // Already switched when the stretch block started — just keep playing.
+      } else if (cd) {
         p.setBaseVolume(DIP_VOLUME);
         void p.play(cd.uri).catch(() => {});
       } else {
@@ -142,10 +133,16 @@ export function Workout({
     }
   }, [state.status]);
 
-  // Interval-aware volume: full during work, dipped otherwise.
+  // Interval-aware volume: full during work, dipped otherwise. Entering the
+  // cool-down block switches to the cool-down playlist (once).
   useEffect(() => {
     const kind = state.session[state.index].kind;
     playerRef.current?.setBaseVolume(kind === 'work' ? WORK_VOLUME : DIP_VOLUME);
+    if (kind === 'cooldown' && !cooldownStartedRef.current) {
+      cooldownStartedRef.current = true;
+      const cd = cooldownPlaylist();
+      if (cd) void playerRef.current?.play(cd.uri).catch(() => {});
+    }
   }, [state.index, state.session]);
 
   // Drift-free ticking: measure real elapsed time between ticks.
@@ -161,6 +158,20 @@ export function Workout({
 
   // Stop any in-flight speech when the workout unmounts (e.g. user exits).
   useEffect(() => cancelSpeech, []);
+
+  // Duck follows actual speech: the fixed-length duck() after each speak() only
+  // bridges the TTS fetch; once playback starts the hold keeps the music down
+  // until the last word, so beeps and later dips can't fade it up mid-sentence.
+  useEffect(() => {
+    const cb = (speaking: boolean) => {
+      const p = playerRef.current;
+      if (!p) return;
+      if (speaking) p.holdForSpeech();
+      else p.releaseSpeech();
+    };
+    onSpeaking(cb);
+    return () => offSpeaking(cb);
+  }, []);
 
   // Keep the screen awake during the workout.
   useEffect(() => {
@@ -214,6 +225,30 @@ export function Workout({
   const prevSecs = useRef(secsLeft);
   const prevStatus = useRef(state.status);
   const halfwayRef = useRef(-1); // interval index that already got its halfway call
+  const jabRef = useRef(-1); // interval index that already got its late callout
+  const earlyRef = useRef(-1); // interval index that already got its early callout
+  // Fair rotation: everyone gets a turn before anyone repeats (shuffled cycles).
+  const encQueueRef = useRef<string[]>([]);
+  const jabQueueRef = useRef<string[]>([]);
+  const drawName = (queue: { current: string[] }, people: string[]): string => {
+    if (queue.current.length === 0) {
+      const a = [...people];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      queue.current = a;
+    }
+    return queue.current.pop()!;
+  };
+  // Drawn once per set and cached, so the choice is stable across ticks.
+  const slotsRef = useRef<{ index: number; slots: CalloutSlot[] }>({ index: -1, slots: [] });
+  const calloutSlots = (index: number, secs: number): CalloutSlot[] => {
+    if (slotsRef.current.index !== index) {
+      slotsRef.current = { index, slots: pickCalloutSlots(secs) };
+    }
+    return slotsRef.current.slots;
+  };
   useEffect(() => {
     if (state.status === 'done') {
       if (prevStatus.current !== 'done') {
@@ -229,7 +264,8 @@ export function Workout({
       prevIndex.current = state.index;
       prevSecs.current = secsLeft;
       transitionTone();
-      announce(state, partner);
+      const line = announcementText(state, partner);
+      if (line) speak(line.text, line.shout ? SHOUT : {});
       playerRef.current?.duck();
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
         beep();
@@ -252,16 +288,90 @@ export function Workout({
         cur.duration >= 10 && // short intervals: halfway collides with 3-2-1 beeps
         prev > half &&
         secsLeft <= half &&
+        halfwayRef.current !== state.index &&
+        calloutSlots(state.index, cur.duration).includes('halfway')
+      ) {
+        halfwayRef.current = state.index;
+        // Mid-set is the one collision-free speech slot — mix it up between a
+        // generic halfway shout and a named encouragement (when there's a roster).
+        speak(
+          people.length > 0 && Math.random() < NAME_RATE
+            ? encouragement(drawName(encQueueRef, people))
+            : halfwayShout(),
+          SHOUT,
+        );
+        playerRef.current?.duck();
+      }
+      // Warm-up moves get their witty jibe at the halfway point, not the
+      // announce — keeps the interval-start speech short.
+      if (
+        state.status === 'running' &&
+        cur.kind === 'warmup' &&
+        prev > half &&
+        secsLeft <= half &&
         halfwayRef.current !== state.index
       ) {
         halfwayRef.current = state.index;
-        // Mid-set is the one collision-free speech slot — use it to shout a
-        // random named encouragement, falling back to the plain halfway cue.
-        const people = partner?.on ? partner.groups.flat() : [];
+        speak(warmupJibe(), SHOUT);
+        playerRef.current?.duck();
+      }
+      // Cool-down stretches work one side at a time — call the swap at halfway.
+      if (
+        state.status === 'running' &&
+        cur.kind === 'cooldown' &&
+        cur.exercise!.cue?.startsWith('each') && // not the "great work" breather
+        prev > half &&
+        secsLeft <= half &&
+        halfwayRef.current !== state.index
+      ) {
+        halfwayRef.current = state.index;
+        speak(cur.exercise!.category === 'upper' ? 'Switch arms' : 'Switch legs');
+        playerRef.current?.duck();
+      }
+      // Extra work-set callouts around the halfway call: an early spur at
+      // quarter-elapsed and a late one at quarter-remaining. Long sets only —
+      // they need clear air between announce, halfway, and the 3-2-1 beeps.
+      const spur = () =>
+        people.length > 0 && Math.random() < NAME_RATE
+          ? encouragement(drawName(encQueueRef, people))
+          : pushShout();
+      const early = cur.duration - Math.ceil(cur.duration / 4);
+      if (
+        state.status === 'running' &&
+        cur.kind === 'work' &&
+        cur.duration >= 30 &&
+        prev > early &&
+        secsLeft <= early &&
+        earlyRef.current !== state.index &&
+        calloutSlots(state.index, cur.duration).includes('early')
+      ) {
+        earlyRef.current = state.index;
+        // Sometimes a form hint instead of a spur — names the exercise so the
+        // right person listens in group mode.
+        const active = (partner?.on
+          ? groupExercises(stationsForRound(state.session, cur.round), cur.station, partner.groups.length)
+          : [cur.exercise!]
+        ).filter((e) => e?.cue);
+        const hinted = active.length > 0 && Math.random() < 0.4 ? active[Math.floor(Math.random() * active.length)] : null;
+        speak(hinted ? `Form check on the ${hinted.name} — ${hinted.cue}!` : spur(), SHOUT);
+        playerRef.current?.duck();
+      }
+      const late = Math.ceil(cur.duration / 4);
+      if (
+        state.status === 'running' &&
+        cur.kind === 'work' &&
+        cur.duration >= 30 &&
+        prev > late &&
+        secsLeft <= late &&
+        jabRef.current !== state.index &&
+        calloutSlots(state.index, cur.duration).includes('late')
+      ) {
+        jabRef.current = state.index;
+        // Nasty-dial odds of a drill-sergeant jab; no roster -> cheeky vocative.
         speak(
-          people.length > 0
-            ? encouragement(people[Math.floor(Math.random() * people.length)])
-            : 'Halfway!',
+          Math.random() < nasty
+            ? jab(people.length > 0 ? drawName(jabQueueRef, people) : undefined)
+            : spur(),
           SHOUT,
         );
         playerRef.current?.duck();
@@ -309,7 +419,7 @@ export function Workout({
         </button>
       )}
       <div className="meta">
-        Round {iv.round}/{totalRounds}
+        {iv.kind === 'warmup' ? 'Warm-up' : iv.kind === 'cooldown' ? 'Cool-down' : `Round ${iv.round}/${totalRounds}`}
         {iv.kind === 'work' && ` · Station ${iv.station}/${stationsPerRound}`}
         {state.status === 'paused' && ' · PAUSED'}
       </div>
@@ -318,17 +428,39 @@ export function Workout({
           {groupExercises(roundStations(iv.round), iv.station, partner!.groups.length).map((e, i) => (
             <div key={i}>
               {groupLabel(partner!.groups[i], i)}: {e.name}
-              {e.equipment === 'dumbbells' && <DumbbellIcon />}
+              <EquipmentIcon equipment={e.equipment} />
             </div>
           ))}
+        </div>
+      ) : (iv.kind === 'rest' || iv.kind === 'roundRest') && nextWork ? (
+        // Rest: next exercise gets equal billing with the rest call itself.
+        <div className="label partner" key={state.index}>
+          <div>Rest</div>
+          {/* .next inside the label keeps its small-print size — reads as a header */}
+          <div className="next">Up next</div>
+          {partnerOn ? (
+            groupExercises(roundStations(nextWork.round), nextWork.station, partner!.groups.length).map(
+              (e, i) => (
+                <div key={i}>
+                  {groupLabel(partner!.groups[i], i)}: {e.name}
+                  <EquipmentIcon equipment={e.equipment} />
+                </div>
+              ),
+            )
+          ) : (
+            <div>
+              {nextWork.exercise!.name}
+              <EquipmentIcon equipment={nextWork.exercise!.equipment} />
+            </div>
+          )}
         </div>
       ) : (
         <>
           <div className="label" key={state.index}>
-            {iv.kind === 'work' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
-            {iv.kind === 'work' && iv.exercise!.equipment === 'dumbbells' && <DumbbellIcon />}
+            {iv.kind === 'work' || iv.kind === 'warmup' || iv.kind === 'cooldown' ? iv.exercise!.name : iv.kind === 'prep' ? 'Get ready' : 'Rest'}
+            {iv.kind === 'work' && <EquipmentIcon equipment={iv.exercise!.equipment} />}
           </div>
-          {!partnerOn && iv.kind === 'work' && iv.exercise?.cue && (
+          {(iv.kind === 'warmup' || iv.kind === 'cooldown' || (!partnerOn && iv.kind === 'work')) && iv.exercise?.cue && (
             <div className="cue">{iv.exercise.cue}</div>
           )}
         </>
@@ -344,18 +476,22 @@ export function Workout({
             : nextWork.exercise!.name}
         </div>
       )}
-      {iv.kind !== 'work' &&
-        (partnerOn ? (
-          iv.kind !== 'prep' && nextWork && (
+      {(iv.kind === 'prep' || iv.kind === 'warmup' || iv.kind === 'cooldown') &&
+        (['warmup', 'cooldown'].includes(state.session[state.index + 1]?.kind ?? '') ? (
+          <div className="next">
+            {iv.kind === 'prep' ? 'Warm-up first' : 'Next'}: {state.session[state.index + 1].exercise!.name}
+          </div>
+        ) : (
+          nextWork && (
             <div className="next">
-              Next —{' '}
-              {groupExercises(roundStations(nextWork.round), nextWork.station, partner!.groups.length)
-                .map((e, i) => `${groupLabel(partner!.groups[i], i)}: ${e.name}`)
-                .join(' · ')}
+              First up{partnerOn ? ' — ' : ': '}
+              {partnerOn
+                ? groupExercises(roundStations(nextWork.round), nextWork.station, partner!.groups.length)
+                    .map((e, i) => `${groupLabel(partner!.groups[i], i)}: ${e.name}`)
+                    .join(' · ')
+                : nextWork.exercise!.name}
             </div>
           )
-        ) : (
-          iv.exercise && <div className="next">Next: {iv.exercise.name}</div>
         ))}
       <div className="controls">
         <button onClick={() => dispatch({ type: 'prev' })} title="Back (←)">⏮</button>
@@ -383,7 +519,7 @@ export function Workout({
                 .map((e) => (
                   <li key={e.id}>
                     <button onClick={() => changeExercise(e)}>
-                      {e.equipment === 'dumbbells' && <DumbbellIcon />}
+                      <EquipmentIcon equipment={e.equipment} />
                       {e.name} <small>({e.category})</small>
                     </button>
                   </li>

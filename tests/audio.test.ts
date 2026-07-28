@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { encouragement, pickVoice } from '../src/audio';
+import { encouragement, pickCalloutSlots, pickVoice } from '../src/audio';
+
+describe('pickCalloutSlots', () => {
+  it('gives a short set one shout-out and a long set two', () => {
+    expect(pickCalloutSlots(30)).toHaveLength(1);
+    expect(pickCalloutSlots(39)).toHaveLength(1);
+    expect(pickCalloutSlots(40)).toHaveLength(2);
+    expect(pickCalloutSlots(60)).toHaveLength(2);
+  });
+
+  it('never exceeds two, and never repeats a moment', () => {
+    for (let secs = 5; secs <= 120; secs += 5) {
+      for (let i = 0; i < 50; i++) {
+        const slots = pickCalloutSlots(secs);
+        expect(slots.length).toBeLessThanOrEqual(2);
+        expect(new Set(slots).size).toBe(slots.length);
+        expect(slots.every((s) => ['early', 'halfway', 'late'].includes(s))).toBe(true);
+      }
+    }
+  });
+
+  it('varies which moment speaks rather than always picking the same one', () => {
+    const seen = new Set(Array.from({ length: 200 }, () => pickCalloutSlots(30)[0]));
+    expect(seen.size).toBe(3);
+  });
+});
 
 const v = (name: string, lang = 'en-GB') => ({ name, lang });
 

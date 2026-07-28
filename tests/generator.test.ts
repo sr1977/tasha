@@ -9,10 +9,11 @@ import {
   banReplacement,
   groupExercises,
   stationsForRound,
-  spaceDumbbells,
+  spaceEquipment,
+  focusPool,
   PREP_SECS,
 } from '../src/generator';
-import { DEFAULT_SETTINGS, type Category, type Exercise, type Settings } from '../src/types';
+import { DEFAULT_SETTINGS, type Category, type Equipment, type Exercise, type Settings } from '../src/types';
 
 const ex = (id: string, category: Category): Exercise => ({
   id,
@@ -74,10 +75,24 @@ describe('buildSession', () => {
   const stations = [ex('u1', 'upper'), ex('l1', 'lower')];
   const session = buildSession([stations], small);
 
-  it('lays out prep, work/rest pairs, roundRest between rounds, no trailing rests', () => {
+  it('lays out prep, warmup + breather, work/rest pairs, roundRest between rounds, cooldown at the end', () => {
     expect(session.map((i) => i.kind)).toEqual([
-      'prep', 'work', 'rest', 'work', 'roundRest', 'work', 'rest', 'work',
+      'prep', 'warmup', 'warmup', 'warmup', 'warmup', 'warmup', 'rest',
+      'work', 'rest', 'work', 'roundRest', 'work', 'rest', 'work',
+      'cooldown', 'cooldown', 'cooldown', 'cooldown', 'cooldown',
     ]);
+  });
+
+  it('warm-up and cool-down each fit in 2 minutes including their breathers', () => {
+    const wu = session.filter((i) => i.kind === 'warmup');
+    const cd = session.filter((i) => i.kind === 'cooldown').reduce((t, i) => t + i.duration, 0);
+    expect(wu.every((i) => i.duration === 15)).toBe(true);
+    expect(wu.reduce((t, i) => t + i.duration, 0)).toBe(75);
+    expect(session[6]).toMatchObject({ kind: 'rest', duration: 20 });
+    expect(session[6].exercise!.id).toBe('u1');
+    expect(wu.reduce((t, i) => t + i.duration, 0) + session[6].duration).toBeLessThanOrEqual(120);
+    expect(cd).toBe(100); // 20s "great work" breather + 4×20s stretches
+    expect(session.find((i) => i.kind === 'cooldown')!.exercise!.id).toBe('cd-gap');
   });
 
   it('uses the same stations each round with correct numbering', () => {
@@ -88,14 +103,14 @@ describe('buildSession', () => {
   });
 
   it('puts the upcoming exercise on rest and roundRest intervals', () => {
-    expect(session[2].exercise!.id).toBe('l1'); // rest before station 2
-    expect(session[4].exercise!.id).toBe('u1'); // roundRest -> next round starts at station 1
+    expect(session[8].exercise!.id).toBe('l1'); // rest before station 2
+    expect(session[10].exercise!.id).toBe('u1'); // roundRest -> next round starts at station 1
   });
 
   it('has a 10s prep and correct total duration', () => {
     expect(session[0].duration).toBe(PREP_SECS);
-    // 10 + (5+3+5) + 7 + (5+3+5) = 43
-    expect(sessionDuration(session)).toBe(43);
+    // 10 + warmup 75 + breather 20 + (5+3+5) + 7 + (5+3+5) + cooldown 100 = 238
+    expect(sessionDuration(session)).toBe(238);
   });
 });
 
@@ -146,19 +161,19 @@ describe('replaceInSession', () => {
   const b = exp('b', 'lower');
   const z = exp('z', 'upper');
   const session = buildSession([[a, b]], { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 });
-  // kinds: prep, work(a), rest(->b), work(b), roundRest(->a), work(a), rest(->b), work(b)
+  // kinds: prep, warmup×5, rest(gap)@6, work(a)@7, rest(->b)@8, work(b)@9, roundRest(->a)@10, work(a)@11, rest(->b)@12, work(b)@13, cooldown×4
 
   it('swaps only intervals after fromIndex', () => {
-    const out = replaceInSession(session, 1, 'a', z);
-    expect(out[1].exercise!.id).toBe('a'); // current interval untouched
-    expect(out[4].exercise!.id).toBe('z'); // roundRest preview swapped
-    expect(out[5].exercise!.id).toBe('z'); // later work swapped
+    const out = replaceInSession(session, 7, 'a', z);
+    expect(out[7].exercise!.id).toBe('a'); // current interval untouched
+    expect(out[10].exercise!.id).toBe('z'); // roundRest preview swapped
+    expect(out[11].exercise!.id).toBe('z'); // later work swapped
   });
 
   it('leaves other exercises alone', () => {
-    const out = replaceInSession(session, 1, 'a', z);
-    expect(out[3].exercise!.id).toBe('b');
-    expect(out[6].exercise!.id).toBe('b');
+    const out = replaceInSession(session, 7, 'a', z);
+    expect(out[9].exercise!.id).toBe('b');
+    expect(out[12].exercise!.id).toBe('b');
   });
 });
 
@@ -192,7 +207,7 @@ describe('stationsForRound', () => {
   });
 
   it('reflects mid-session replacements per round', () => {
-    const out = replaceInSession(buildSession([[a, b]], small), 1, 'a', z);
+    const out = replaceInSession(buildSession([[a, b]], small), 7, 'a', z);
     expect(stationsForRound(out, 1).map((e) => e.id)).toEqual(['a', 'b']); // current round untouched
     expect(stationsForRound(out, 2).map((e) => e.id)).toEqual(['z', 'b']); // later round swapped
   });
@@ -218,19 +233,55 @@ describe('distinct rounds', () => {
   });
 });
 
-describe('spaceDumbbells', () => {
-  const db = (id: string, category: Category): Exercise => ({
-    id,
-    name: id,
-    category,
-    equipment: 'dumbbells',
+describe('focus', () => {
+  const mixed = [
+    ex('u1', 'upper'), ex('u2', 'upper'),
+    ex('l1', 'lower'), ex('l2', 'lower'),
+    ex('c1', 'core'), ex('c2', 'core'),
+  ];
+
+  it('treats undefined, empty and all-three as everything', () => {
+    expect(focusPool(mixed, undefined)).toEqual(mixed);
+    expect(focusPool(mixed, [])).toEqual(mixed);
+    expect(focusPool(mixed, ['upper', 'lower', 'core'])).toEqual(mixed);
   });
-  // circular window of `count` consecutive stations must hold <= 1 dumbbell
-  const maxConcurrentDb = (out: Exercise[], count: number) => {
+
+  it('keeps only the focused categories', () => {
+    expect(focusPool(mixed, ['upper']).map((e) => e.id)).toEqual(['u1', 'u2']);
+    expect(focusPool(mixed, ['upper', 'core']).map((e) => e.id)).toEqual(['u1', 'u2', 'c1', 'c2']);
+  });
+
+  it('falls back to the whole pool when the focus matches nothing', () => {
+    expect(focusPool([ex('u1', 'upper')], ['core'])).toHaveLength(1);
+  });
+
+  it('generates work stations only from the focused categories', () => {
+    const session = generateSession(mixed, { ...small, focus: ['core'] });
+    const works = session.filter((i) => i.kind === 'work');
+    expect(works.length).toBeGreaterThan(0);
+    expect(works.every((i) => i.exercise!.category === 'core')).toBe(true);
+  });
+
+  it('leaves the warm-up and cool-down full-body', () => {
+    const session = generateSession(mixed, { ...small, focus: ['core'] });
+    const other = session.filter((i) => i.kind === 'warmup' || i.kind === 'cooldown');
+    expect(other.some((i) => i.exercise!.category !== 'core')).toBe(true);
+  });
+});
+
+describe('spaceEquipment', () => {
+  const kit =
+    (equipment: Equipment) =>
+    (id: string, category: Category): Exercise => ({ id, name: id, category, equipment });
+  const db = kit('dumbbells');
+  const mb = kit('medicine ball');
+  // Worst circular window of `count` consecutive stations, per equipment kind:
+  // rounds repeat, so the last station and the first are worked together too.
+  const maxConcurrent = (out: Exercise[], count: number, equipment: Equipment) => {
     let worst = 0;
     for (let s = 0; s < out.length; s++) {
       let c = 0;
-      for (let g = 0; g < count; g++) if (out[(s + g) % out.length].equipment === 'dumbbells') c++;
+      for (let g = 0; g < count; g++) if (out[(s + g) % out.length].equipment === equipment) c++;
       worst = Math.max(worst, c);
     }
     return worst;
@@ -238,24 +289,65 @@ describe('spaceDumbbells', () => {
 
   it('spaces dumbbells so 2 groups never share the weights (adjacent pair)', () => {
     const picks = [db('d1', 'upper'), db('d2', 'lower'), ex('b1', 'core'), ex('b2', 'core')];
-    const out = spaceDumbbells(picks, picks, 2);
+    const out = spaceEquipment(picks, picks, 2);
     expect(out).toHaveLength(4);
-    expect(maxConcurrentDb(out, 2)).toBe(1);
+    expect(maxConcurrent(out, 2, 'dumbbells')).toBe(1);
   });
 
   it('swaps surplus dumbbells for pool bodyweight when too many to space', () => {
     // 4 dumbbells over 4 stations, 2 groups => max 2 may stay; 2 get swapped out.
     const picks = [db('d1', 'upper'), db('d2', 'upper'), db('d3', 'lower'), db('d4', 'lower')];
     const pool = [...picks, ex('b1', 'upper'), ex('b2', 'lower')];
-    const out = spaceDumbbells(picks, pool, 2, () => 0);
+    const out = spaceEquipment(picks, pool, 2, () => 0);
     expect(out).toHaveLength(4);
     expect(out.filter((e) => e.equipment === 'dumbbells')).toHaveLength(2);
-    expect(maxConcurrentDb(out, 2)).toBe(1);
+    expect(maxConcurrent(out, 2, 'dumbbells')).toBe(1);
   });
 
   it('leaves picks untouched for a single group (no concurrency)', () => {
     const picks = [db('d1', 'upper'), db('d2', 'lower')];
-    expect(spaceDumbbells(picks, picks, 1)).toEqual(picks);
+    expect(spaceEquipment(picks, picks, 1)).toEqual(picks);
+  });
+
+  it('never runs two medicine-ball stations at once', () => {
+    const picks = [mb('m1', 'core'), mb('m2', 'core'), ex('b1', 'upper'), ex('b2', 'lower')];
+    const out = spaceEquipment(picks, picks, 2);
+    expect(maxConcurrent(out, 2, 'medicine ball')).toBe(1);
+  });
+
+  it('constrains each kind separately — dumbbells and the ball may run together', () => {
+    // 3 dumbbells + 3 balls over 6 stations, 2 groups: every slot is shared kit,
+    // so the only valid layouts alternate the two kinds.
+    const picks = [
+      db('d1', 'upper'), db('d2', 'lower'), db('d3', 'upper'),
+      mb('m1', 'core'), mb('m2', 'core'), mb('m3', 'core'),
+    ];
+    const out = spaceEquipment(picks, picks, 2);
+    expect(out).toHaveLength(6);
+    expect(out.filter((e) => e.equipment === 'dumbbells')).toHaveLength(3);
+    expect(maxConcurrent(out, 2, 'dumbbells')).toBe(1);
+    expect(maxConcurrent(out, 2, 'medicine ball')).toBe(1);
+  });
+
+  it('holds the per-kind limit across group counts and station counts', () => {
+    const pool = [
+      ex('b1', 'upper'), ex('b2', 'lower'), ex('b3', 'core'),
+      ex('b4', 'upper'), ex('b5', 'lower'), ex('b6', 'core'),
+    ];
+    for (let n = 2; n <= 10; n++) {
+      for (let count = 2; count <= 4; count++) {
+        const picks = Array.from({ length: n }, (_, i) =>
+          i % 3 === 0 ? db(`d${i}`, 'upper') : i % 3 === 1 ? mb(`m${i}`, 'core') : ex(`b${i}`, 'lower'),
+        );
+        const out = spaceEquipment(picks, [...picks, ...pool], count, () => 0);
+        expect(out).toHaveLength(n);
+        for (const kind of ['dumbbells', 'medicine ball'] as Equipment[]) {
+          const used = out.filter((e) => e.equipment === kind).length;
+          // Only assert the guarantee where the kind actually fits in n stations.
+          if (used <= Math.floor(n / count)) expect(maxConcurrent(out, count, kind)).toBeLessThan(2);
+        }
+      }
+    }
   });
 });
 

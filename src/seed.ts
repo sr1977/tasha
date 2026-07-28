@@ -21,6 +21,8 @@ const raw: [string, Category, Equipment, string][] = [
   ['Russian twists', 'core', 'bodyweight', 'rotate from the torso'],
   ['Leg raises', 'core', 'bodyweight', 'press your lower back into the floor'],
   ['Bicycle crunches', 'core', 'bodyweight', 'slow and controlled'],
+  ['Plank ball pull-throughs', 'core', 'medicine ball', 'hips level — drag it through with the opposite hand'],
+  ['Standing ball twists', 'core', 'medicine ball', 'arms long, rotate from the waist not the arms'],
 ];
 
 export const SEED_POOL: Exercise[] = raw.map(([name, category, equipment, cue], i) => ({

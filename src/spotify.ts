@@ -14,10 +14,56 @@ export const DIP_VOLUME = 0.35;
 const AUTH_KEY = 'tasha.spotify.auth';
 const ERROR_KEY = 'tasha.spotify.error';
 const VERIFIER_KEY = 'tasha.spotify.verifier';
-const DUCK_VOLUME = 0.15;
+const DUCK_VOLUME = 0.07; // near-silent while the coach is speaking
 const DUCK_MS = 2500;
+const SPEECH_HOLD_MAX_MS = 25_000; // backstop if a speech-end event never arrives
 const PLAYLISTS_KEY = 'tasha.spotify.playlists';
 const ACTIVE_KEY = 'tasha.spotify.active';
+
+/**
+ * Music volume policy. A speech hold outranks every timed dip: while the coach
+ * has the floor the music stays near-silent, and only the end of speech (or the
+ * backstop) brings it back — a beep or a fetch bridge can't fade it up early.
+ */
+export function createDucker(setVolume: (v: number) => void) {
+  let base = WORK_VOLUME;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let speechHold = false;
+
+  const release = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    speechHold = false;
+    setVolume(base);
+  };
+
+  return {
+    setBase(v: number) {
+      base = v;
+      if (timer === undefined) setVolume(base); // mid-dip: the restore picks it up
+    },
+    duck(volume = DUCK_VOLUME, ms = DUCK_MS) {
+      if (speechHold) return;
+      clearTimeout(timer);
+      setVolume(volume);
+      timer = setTimeout(() => {
+        timer = undefined;
+        setVolume(base);
+      }, ms);
+    },
+    holdForSpeech() {
+      clearTimeout(timer);
+      speechHold = true;
+      setVolume(DUCK_VOLUME);
+      // Backstop only: a dropped speech-end event must not mute the music forever.
+      timer = setTimeout(release, SPEECH_HOLD_MAX_MS);
+    },
+    releaseSpeech: release,
+    stop() {
+      clearTimeout(timer);
+    },
+  };
+}
 
 export interface SpotifyPlaylist {
   id: string; // crypto.randomUUID()
@@ -285,7 +331,11 @@ export interface PlayerHandle {
   resume(): void;
   skipTrack(): void;
   setBaseVolume(v: number): void;
+  /** Brief dip (tones, beeps, bridging a TTS fetch). Ignored while speech holds. */
   duck(volume?: number, ms?: number): void;
+  /** Coach has the floor: stay near-silent until releaseSpeech(). */
+  holdForSpeech(): void;
+  releaseSpeech(): void;
   disconnect(): void;
   onTrack(cb: (label: string | null) => void): void;
 }
@@ -329,8 +379,7 @@ async function buildPlayer(): Promise<PlayerHandle | null> {
   });
 
   let trackCb: ((label: string | null) => void) | null = null;
-  let baseVolume = WORK_VOLUME;
-  let duckTimer: ReturnType<typeof setTimeout> | undefined;
+  const ducker = createDucker((v) => player.setVolume(v).catch(() => {}));
 
   const ready = new Promise<string | null>((resolve) => {
     player.addListener('ready', (data: never) => {
@@ -407,17 +456,15 @@ async function buildPlayer(): Promise<PlayerHandle | null> {
     console.warn('[tasha] spotify: device transfer never succeeded; trying to play anyway');
   };
 
-  const applyBase = () => {
-    player.setVolume(baseVolume).catch(() => {});
-  };
-
   return {
     async play(playlistUri) {
       await waitForDevice();
       await api(`/me/player/play?device_id=${deviceId}`, { context_uri: playlistUri });
-      // ponytail: shuffle after play — shuffle-before-play fails with no active
-      // playback, so the first track is unshuffled; acceptable.
+      // Shuffle can only be set once playback exists (shuffle-before-play
+      // fails with no active playback), so the playlist always opens on
+      // track 1 — skip once to land on a random track instead.
       await api(`/me/player/shuffle?state=true&device_id=${deviceId}`);
+      await player.nextTrack().catch(() => {});
     },
     pause() {
       player.pause().catch(() => {});
@@ -428,20 +475,12 @@ async function buildPlayer(): Promise<PlayerHandle | null> {
     skipTrack() {
       player.nextTrack().catch(() => {});
     },
-    setBaseVolume(v) {
-      baseVolume = v;
-      if (duckTimer === undefined) applyBase(); // mid-duck: restore picks up new base
-    },
-    duck(volume = DUCK_VOLUME, ms = DUCK_MS) {
-      clearTimeout(duckTimer);
-      player.setVolume(volume).catch(() => {});
-      duckTimer = setTimeout(() => {
-        duckTimer = undefined;
-        applyBase();
-      }, ms);
-    },
+    setBaseVolume: ducker.setBase,
+    duck: ducker.duck,
+    holdForSpeech: ducker.holdForSpeech,
+    releaseSpeech: ducker.releaseSpeech,
     disconnect() {
-      clearTimeout(duckTimer);
+      ducker.stop();
       player.pause().catch(() => {});
       player.disconnect();
     },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Session, type Settings } from '../types';
-import { banReplacement, buildSession, generateSession, groupLabel, roundCount, sessionDuration, stationsForRound } from '../generator';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from '../types';
+import { banReplacement, buildSession, CATEGORY_ORDER, focusPool, generateSession, groupLabel, roundCount, sessionDuration, stationsForRound } from '../generator';
 import {
   getGoogleVoice,
   getVoiceName,
@@ -11,11 +11,22 @@ import {
   setVoiceName,
   speak,
 } from '../audio';
-import { DumbbellIcon } from './DumbbellIcon';
+import { Dial } from './Dial';
+import { EquipmentIcon } from './EquipmentIcon';
 import { Music } from './Music';
 
 export const fmt = (secs: number) =>
   `${Math.floor(secs / 60)}:${String(Math.round(secs) % 60).padStart(2, '0')}`;
+
+// Nasty dial (0–100) → quirky tier label.
+const nastyLabel = (v: number) =>
+  v === 0 ? '😇 Angel' :
+  v <= 20 ? 'Sweetheart' :
+  v <= 40 ? 'Cheeky' :
+  v <= 60 ? 'Sassy' :
+  v <= 80 ? 'Savage' :
+  v < 100 ? 'Menace' :
+  '😈 EVIL MODE';
 
 interface Props {
   pool: Exercise[];
@@ -58,10 +69,13 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
   // roster = the permanent list of people (survives across sessions). Session
   // participation is just group membership; the bench is everyone else.
   const roster = settings.roster ?? DEFAULT_ROSTER;
+  const groupMode = settings.partner?.on ?? false;
   const groups = settings.partner?.groups ?? [];
   const groupOf = (person: string) => groups.findIndex((g) => g.includes(person));
   const participants = roster.filter((p) => groupOf(p) >= 0);
   const bench = roster.filter((p) => groupOf(p) < 0);
+  // Without groups there is no bench to sit on — everyone known is training.
+  const shownPeople = groupMode ? participants : roster;
   const setGroups = (next: string[][]) =>
     setSettings({ ...settings, partner: { on: true, groups: next } });
 
@@ -89,6 +103,36 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
         groups: groups.map((g) => g.filter((p) => p !== person)),
       },
     });
+
+  // Focus: which categories the work stations draw from. All three ticked (or
+  // none) means everything, so the checkboxes read as "on" in the default state.
+  const focus = settings.focus?.length ? settings.focus : CATEGORY_ORDER;
+  const toggleFocus = (cat: Category) => {
+    const next = focus.includes(cat) ? focus.filter((c) => c !== cat) : [...focus, cat];
+    setSettings({ ...settings, focus: next.length === 0 ? undefined : next });
+  };
+  const focusedPool = focusPool(pool, settings.focus);
+
+  // Wipes the locked-in session and the session numbers. The roster and group
+  // assignments are the household's, not this session's — they survive.
+  const clearSession = () => {
+    if (!confirm('Clear the saved session and reset the session settings to defaults?')) return;
+    const { workSecs, restSecs, stations, roundRestSecs, totalMins, distinctRounds, nasty, focus } =
+      DEFAULT_SETTINGS;
+    setSession(null);
+    setSettings({
+      ...settings,
+      workSecs,
+      restSecs,
+      stations,
+      roundRestSecs,
+      totalMins,
+      distinctRounds,
+      nasty,
+      focus,
+    });
+    setDrafts({}); // half-typed values must not survive the reset
+  };
 
   const num = (key: keyof Settings, label: string, min: number) => (
     <label>
@@ -122,6 +166,18 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     <>
       <section>
         <h2>Session</h2>
+        <div className="nasty">
+          <Dial
+            value={Math.round((settings.nasty ?? 0.25) * 100)}
+            onChange={(v) => setSettings({ ...settings, nasty: v / 100 })}
+            label={nastyLabel(Math.round((settings.nasty ?? 0.25) * 100))}
+          />
+          <div className="nasty-caption">
+            <span className="nasty-kicker">How should Tasha behave today?</span>
+            <strong className="nasty-verdict">{nastyLabel(Math.round((settings.nasty ?? 0.25) * 100))}</strong>
+            <span className="nasty-hint">Drag the knob, or focus it and use arrow keys</span>
+          </div>
+        </div>
         <div className="settings-grid">
           {num('workSecs', 'Work (seconds)', 5)}
           {num('restSecs', 'Rest (seconds)', 0)}
@@ -129,6 +185,24 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           {num('roundRestSecs', 'Round rest (seconds)', 0)}
           {num('totalMins', 'Target length (minutes)', 5)}
           {num('distinctRounds', 'Distinct rounds', 1)}
+        </div>
+        <div className="focus">
+          <span className="focus-kicker">Focus</span>
+          {CATEGORY_ORDER.map((cat) => (
+            <label key={cat} className={focus.includes(cat) ? 'on' : ''}>
+              <input
+                type="checkbox"
+                checked={focus.includes(cat)}
+                onChange={() => toggleFocus(cat)}
+              />
+              {cat}
+            </label>
+          ))}
+          <span className="focus-hint">
+            {focus.length === CATEGORY_ORDER.length
+              ? 'Everything'
+              : `${focusedPool.length} exercises in focus`}
+          </span>
         </div>
         <label className="partner-toggle">
           <input
@@ -146,51 +220,72 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           />
           Group mode — rotate together on offset stations
         </label>
-        {settings.partner?.on && (
-          <>
-            <div className="partner-count">
-              <select value={groups.length} onChange={(e) => setGroupCount(Number(e.target.value))}>
-                {[1, 2, 3, 4].map((n) => (
-                  <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
-                ))}
-              </select>
-            </div>
-            {participants.length > 0 && (
+        {groupMode && (
+          <div className="partner-count">
+            <select value={groups.length} onChange={(e) => setGroupCount(Number(e.target.value))}>
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {/* The roster is managed with or without group mode: Tasha shouts these
+            names either way, so hiding it behind the toggle stranded you with no
+            way to add anyone. Group assignment is the only group-mode-only bit. */}
+        <>
+            {!groupMode && <span className="bench-label">Training today</span>}
+            {shownPeople.length > 0 && (
               <ul className="roster">
-                {participants.map((person) => (
+                {shownPeople.map((person) => (
                   <li key={person}>
                     <span className="person-name">{person}</span>
-                    <select
-                      value={groupOf(person)}
-                      onChange={(e) => assign(person, Number(e.target.value))}
-                    >
-                      {groups.map((_, i) => (
-                        <option key={i} value={i}>{`Group ${i + 1}`}</option>
-                      ))}
-                    </select>
-                    <button onClick={() => removeFromSession(person)} title="Remove from this session">
-                      ✕
-                    </button>
+                    {groupMode ? (
+                      <>
+                        <select
+                          value={groupOf(person)}
+                          onChange={(e) => assign(person, Number(e.target.value))}
+                        >
+                          {groups.map((_, i) => (
+                            <option key={i} value={i}>{`Group ${i + 1}`}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => removeFromSession(person)} title="Remove from this session">
+                          ✕
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="del"
+                        onClick={() => deleteFromRoster(person)}
+                        title="Delete from roster permanently"
+                      >
+                        🗑
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
             <div className="bench">
-              <span className="bench-label">Not in this session</span>
-              {bench.map((person) => (
-                <span key={person} className="bench-person">
-                  <button onClick={() => addToSession(person)} title="Add to this session">
-                    + {person}
-                  </button>
-                  <button
-                    className="del"
-                    onClick={() => deleteFromRoster(person)}
-                    title="Delete from roster permanently"
-                  >
-                    🗑
-                  </button>
-                </span>
-              ))}
+              {groupMode && (
+                <>
+                  <span className="bench-label">Not in this session</span>
+                  {bench.map((person) => (
+                    <span key={person} className="bench-person">
+                      <button onClick={() => addToSession(person)} title="Add to this session">
+                        + {person}
+                      </button>
+                      <button
+                        className="del"
+                        onClick={() => deleteFromRoster(person)}
+                        title="Delete from roster permanently"
+                      >
+                        🗑
+                      </button>
+                    </span>
+                  ))}
+                </>
+              )}
               <span className="add-person">
                 <input
                   value={newPerson}
@@ -201,18 +296,21 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                 <button onClick={addPerson}>Add</button>
               </span>
             </div>
-            <ol className="group-preview">
-              {groups.map((g, i) => (
-                <li key={i}>{groupLabel(g, i)}</li>
-              ))}
-            </ol>
-            {settings.stations < groups.length && (
-              <p className="warn">
-                Fewer stations than groups — some groups will share a station.
-              </p>
+            {groupMode && (
+              <>
+                <ol className="group-preview">
+                  {groups.map((g, i) => (
+                    <li key={i}>{groupLabel(g, i)}</li>
+                  ))}
+                </ol>
+                {settings.stations < groups.length && (
+                  <p className="warn">
+                    Fewer stations than groups — some groups will share a station.
+                  </p>
+                )}
+              </>
             )}
-          </>
-        )}
+        </>
         {(voices.length > 0 || googleTtsActive()) && (
           <div className="voice-row">
             {googleTtsActive() ? (
@@ -258,14 +356,19 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           </p>
         ) : (
           <>
-            {pool.length < settings.stations && (
+            {focusedPool.length < settings.stations && (
               <p className="warn">
-                Only {pool.length} exercises for {settings.stations} stations — some will repeat.
+                Only {focusedPool.length} exercises for {settings.stations} stations — some will repeat.
               </p>
             )}
-            <button onClick={() => setSession(generateSession(pool, settings))}>
-              {session ? 'Regenerate' : 'Generate session'}
-            </button>
+            <div className="session-actions">
+              <button onClick={() => setSession(generateSession(pool, settings))}>
+                {session ? 'Regenerate' : 'Generate session'}
+              </button>
+              <button className="clear" onClick={clearSession}>
+                Clear session
+              </button>
+            </div>
           </>
         )}
         {session && roundSets && (
@@ -279,7 +382,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                 <ol className="stations">
                   {set.map((s, i) => (
                     <li key={`${s.id}-${i}`}>
-                      {s.equipment === 'dumbbells' && <DumbbellIcon />}
+                      <EquipmentIcon equipment={s.equipment} />
                       {s.name} <small>({s.category})</small>{' '}
                       <button onClick={() => swap(k, i)} title="Swap this station">↻</button>
                     </li>

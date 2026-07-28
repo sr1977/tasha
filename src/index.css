@@ -378,6 +378,148 @@ select {
   font-size: 0.85rem;
 }
 
+/* ---- focus: which categories the stations draw from ---- */
+.focus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+.focus-kicker,
+.focus-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.focus-hint {
+  letter-spacing: 0.08em;
+  margin-left: var(--space-sm);
+}
+.focus label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.focus label.on {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.session-actions {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+}
+.session-actions .clear {
+  margin-left: auto; /* destructive: keep it away from Regenerate */
+  color: var(--text-muted);
+}
+.session-actions .clear:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- nasty dial: the loudest thing on the setup screen ---- */
+.nasty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  margin: 0 0 var(--space-xl);
+  padding: var(--space-lg) 0;
+  border-top: 3px solid var(--text);
+  border-bottom: 3px solid var(--text);
+}
+.nasty-caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.nasty-kicker {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.nasty-verdict {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 9vw, 4.5rem);
+  line-height: 0.92;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.nasty-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.dial {
+  width: clamp(160px, 34vw, 220px);
+  height: clamp(160px, 34vw, 220px);
+  flex: none;
+  cursor: grab;
+  touch-action: none; /* knob drag, not page scroll */
+}
+.dial:active {
+  cursor: grabbing;
+}
+.dial:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+.dial .knob {
+  fill: var(--ink-2);
+  stroke: var(--text);
+  stroke-width: 3;
+}
+.dial:hover .knob {
+  stroke: var(--accent);
+}
+.dial .readout {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px; /* SVG units: ~half the knob diameter */
+  fill: var(--text);
+}
+.dial .pointer {
+  /* white so it stays distinct where it crosses the accent-filled ticks */
+  stroke: var(--text);
+  stroke-width: 6;
+  stroke-linecap: butt; /* hard edges */
+}
+.dial .tick {
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.dial .tick.major {
+  stroke-width: 4;
+}
+.dial .tick.on {
+  stroke: var(--accent);
+}
+@media (max-width: 480px) {
+  .nasty {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+  }
+}
+
 /* ---- workout: the drill hall ---- */
 .workout {
   position: fixed;
@@ -391,8 +533,12 @@ select {
   transition: background 0.3s ease-out;
   background: var(--ink);
 }
-.workout.prep {
+.workout.prep,
+.workout.warmup {
   background: var(--prep);
+}
+.workout.cooldown {
+  background: var(--rest);
 }
 .workout.work {
   background: var(--work);

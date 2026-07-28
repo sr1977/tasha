@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import type { Category, Equipment, Exercise } from '../types';
-import { DumbbellIcon } from './DumbbellIcon';
+import { EquipmentIcon } from './EquipmentIcon';
 
 const CATEGORIES: Category[] = ['upper', 'lower', 'core'];
-const EQUIPMENT: Equipment[] = ['bodyweight', 'dumbbells'];
+const EQUIPMENT: Equipment[] = ['bodyweight', 'dumbbells', 'medicine ball'];
 
 export function Pool({ pool, setPool }: { pool: Exercise[]; setPool: (p: Exercise[]) => void }) {
   const [name, setName] = useState('');
@@ -62,7 +62,7 @@ export function Pool({ pool, setPool }: { pool: Exercise[]; setPool: (p: Exercis
       <ul className="pool-list">
         {shown.map((e) => (
           <li key={e.id}>
-            {e.equipment === 'dumbbells' && <DumbbellIcon />}
+            <EquipmentIcon equipment={e.equipment} />
             <input value={e.name} onChange={(ev) => update(e.id, { name: ev.target.value })} />
             <select
               value={e.category}

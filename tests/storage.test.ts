@@ -28,6 +28,29 @@ describe('storage', () => {
     expect(loadPool()).toEqual(pool);
   });
 
+  it('delivers seed exercises added since the pool was saved', () => {
+    // A pool saved before the last two seed entries existed.
+    const old = SEED_POOL.slice(0, SEED_POOL.length - 2);
+    store.set('tasha.pool', JSON.stringify(old));
+    expect(loadPool()).toEqual(SEED_POOL);
+  });
+
+  it('offers each new seed exercise once — deleting it keeps it deleted', () => {
+    const old = SEED_POOL.slice(0, SEED_POOL.length - 2);
+    store.set('tasha.pool', JSON.stringify(old));
+    const merged = loadPool(); // the additions arrive and are persisted
+    expect(merged).toHaveLength(SEED_POOL.length);
+    savePool(merged.filter((e) => e.id !== SEED_POOL[SEED_POOL.length - 1].id));
+    expect(loadPool()).toHaveLength(SEED_POOL.length - 1);
+  });
+
+  it('leaves a pool alone once it has seen every seed exercise', () => {
+    const custom = [{ id: 'x', name: 'Test', category: 'core', equipment: 'bodyweight' } as const];
+    savePool([...custom]);
+    expect(loadPool()).toEqual(custom);
+    expect(loadPool()).toEqual(custom); // idempotent across loads
+  });
+
   it('merges partial stored settings over defaults', () => {
     store.set('tasha.settings', JSON.stringify({ workSecs: 30 }));
     expect(loadSettings()).toEqual({ ...DEFAULT_SETTINGS, workSecs: 30 });
