@@ -11,7 +11,10 @@ export interface Exercise {
   category: Category;
   equipment: Equipment;
   pref?: Pref;
+  /** Headline form cue — shown on screen and read out with "next up". */
   cue?: string;
+  /** Extra form cues; mid-set form callouts draw from [cue, ...cues]. */
+  cues?: string[];
 }
 
 export interface PartnerConfig {

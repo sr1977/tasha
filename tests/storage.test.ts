@@ -44,6 +44,18 @@ describe('storage', () => {
     expect(loadPool()).toHaveLength(SEED_POOL.length - 1);
   });
 
+  it('backfills seed cues onto pools saved before multi-cue seeds', () => {
+    const { cues: _dropped, ...bare } = SEED_POOL[0];
+    store.set('tasha.pool', JSON.stringify([bare, ...SEED_POOL.slice(1)]));
+    expect(loadPool()[0].cues).toEqual(SEED_POOL[0].cues);
+  });
+
+  it('keeps user-edited cues over the seed backfill', () => {
+    const edited = { ...SEED_POOL[0], cues: ['my own cue'] };
+    store.set('tasha.pool', JSON.stringify([edited, ...SEED_POOL.slice(1)]));
+    expect(loadPool()[0].cues).toEqual(['my own cue']);
+  });
+
   it('leaves a pool alone once it has seen every seed exercise', () => {
     const custom = [{ id: 'x', name: 'Test', category: 'core', equipment: 'bodyweight' } as const];
     savePool([...custom]);

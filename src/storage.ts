@@ -39,7 +39,12 @@ export function loadPool(): Exercise[] {
     return SEED_POOL;
   }
   // Cardio was dropped — filter it out of pools saved before the change.
-  const pool = (parsed as Exercise[]).filter((e) => (e.category as string) !== 'cardio');
+  // Pools saved before multi-cue seeds adopt the seed's extra cues; an entry
+  // that already has its own cues (user-edited) keeps them.
+  const seedById = new Map(SEED_POOL.map((e) => [e.id, e]));
+  const pool = (parsed as Exercise[])
+    .filter((e) => (e.category as string) !== 'cardio')
+    .map((e) => (!e.cues && seedById.get(e.id)?.cues ? { ...e, cues: seedById.get(e.id)!.cues } : e));
   const stored = localStorage.getItem(SEED_MARK_KEY);
   const mark = stored === null ? inferSeedMark(pool) : Number(stored) || 0;
   if (mark >= SEED_POOL.length) return pool;

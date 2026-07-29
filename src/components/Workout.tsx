@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer } from '../timer';
-import { beep, cancelSpeech, type CalloutSlot, encouragement, halfwayShout, jab, offSpeaking, onSpeaking, pickCalloutSlots, pushShout, SHOUT, speak, transitionTone, warmupJibe } from '../audio';
+import { activityShout, beep, cancelSpeech, type CalloutSlot, encouragement, formShout, halfwayShout, jab, offSpeaking, onSpeaking, pickCalloutSlots, pushShout, SHOUT, speak, teamShout, transitionTone, warmupJibe } from '../audio';
 import { announcementText } from '../coach';
 import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationsForRound } from '../generator';
 import { fmt } from './Setup';
@@ -13,6 +13,14 @@ import { createVoiceControl, voiceSupported } from '../voice';
 // shout. Hearing your own name mid-set is the point of keeping a roster; the
 // remainder keeps her from sounding like a register being read out.
 const NAME_RATE = 0.85;
+
+// Of the callouts that name someone, this share address the whole session
+// instead. Solo sessions never use these.
+const TEAM_RATE = 0.25;
+
+// Share of mid-set callouts tied to the exercise's equipment rather than a
+// generic line. Applies to halfway + spurs; jabs/form hints untouched.
+const ACTIVITY_RATE = 0.3;
 
 export function Workout({
   session,
@@ -241,6 +249,15 @@ export function Workout({
     }
     return queue.current.pop()!;
   };
+  // Every form cue an exercise offers, headline first.
+  const allCues = (e: Exercise): string[] =>
+    [e.cue, ...(e.cues ?? [])].filter((c): c is string => Boolean(c));
+  // The "named" side of a callout draw: usually one person, sometimes the whole
+  // session — "come on team" to one person would be wrong, hence the >= 2.
+  const namedOrTeam = () =>
+    people.length >= 2 && Math.random() < TEAM_RATE
+      ? teamShout()
+      : encouragement(drawName(encQueueRef, people));
   // Drawn once per set and cached, so the choice is stable across ticks.
   const slotsRef = useRef<{ index: number; slots: CalloutSlot[] }>({ index: -1, slots: [] });
   const calloutSlots = (index: number, secs: number): CalloutSlot[] => {
@@ -282,6 +299,28 @@ export function Workout({
       }
       const cur = state.session[state.index];
       const half = Math.ceil(cur.duration / 2);
+      // Exercises in play right now: the station's one exercise, or one per
+      // group in group mode (entries can be undefined — filter them).
+      const activeNow: Exercise[] = (partner?.on
+        ? groupExercises(stationsForRound(state.session, cur.round), cur.station, partner.groups.length)
+        : [cur.exercise!]
+      ).filter((e): e is Exercise => Boolean(e));
+      // One mid-set line: exercise-keyed at ACTIVITY_RATE — a form cue for the
+      // move being done, or an equipment line when the exercise has no cues —
+      // else the existing named-or-impersonal draw. `impersonal` is the
+      // fallback pool for the slot.
+      const midSetLine = (impersonal: () => string): string => {
+        if (activeNow.length > 0 && Math.random() < ACTIVITY_RATE) {
+          const ex = activeNow[Math.floor(Math.random() * activeNow.length)];
+          const name =
+            people.length > 0 && Math.random() < NAME_RATE
+              ? drawName(encQueueRef, people)
+              : undefined;
+          const cues = allCues(ex);
+          return cues.length > 0 ? formShout(cues, name) : activityShout(ex.equipment, name);
+        }
+        return people.length > 0 && Math.random() < NAME_RATE ? namedOrTeam() : impersonal();
+      };
       if (
         state.status === 'running' &&
         cur.kind === 'work' &&
@@ -294,12 +333,7 @@ export function Workout({
         halfwayRef.current = state.index;
         // Mid-set is the one collision-free speech slot — mix it up between a
         // generic halfway shout and a named encouragement (when there's a roster).
-        speak(
-          people.length > 0 && Math.random() < NAME_RATE
-            ? encouragement(drawName(encQueueRef, people))
-            : halfwayShout(),
-          SHOUT,
-        );
+        speak(midSetLine(halfwayShout), SHOUT);
         playerRef.current?.duck();
       }
       // Warm-up moves get their witty jibe at the halfway point, not the
@@ -331,10 +365,7 @@ export function Workout({
       // Extra work-set callouts around the halfway call: an early spur at
       // quarter-elapsed and a late one at quarter-remaining. Long sets only —
       // they need clear air between announce, halfway, and the 3-2-1 beeps.
-      const spur = () =>
-        people.length > 0 && Math.random() < NAME_RATE
-          ? encouragement(drawName(encQueueRef, people))
-          : pushShout();
+      const spur = () => midSetLine(pushShout);
       const early = cur.duration - Math.ceil(cur.duration / 4);
       if (
         state.status === 'running' &&
@@ -348,12 +379,15 @@ export function Workout({
         earlyRef.current = state.index;
         // Sometimes a form hint instead of a spur — names the exercise so the
         // right person listens in group mode.
-        const active = (partner?.on
-          ? groupExercises(stationsForRound(state.session, cur.round), cur.station, partner.groups.length)
-          : [cur.exercise!]
-        ).filter((e) => e?.cue);
+        const active = activeNow.filter((e) => e.cue);
         const hinted = active.length > 0 && Math.random() < 0.4 ? active[Math.floor(Math.random() * active.length)] : null;
-        speak(hinted ? `Form check on the ${hinted.name} — ${hinted.cue}!` : spur(), SHOUT);
+        const hintCues = hinted ? allCues(hinted) : [];
+        speak(
+          hinted
+            ? `Form check on the ${hinted.name} — ${hintCues[Math.floor(Math.random() * hintCues.length)]}!`
+            : spur(),
+          SHOUT,
+        );
         playerRef.current?.duck();
       }
       const late = Math.ceil(cur.duration / 4);

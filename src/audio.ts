@@ -1,3 +1,5 @@
+import type { Equipment } from './types';
+
 let ctx: AudioContext | null = null;
 const speechListeners = new Set<(speaking: boolean) => void>();
 const speechListener = (speaking: boolean) => speechListeners.forEach((cb) => cb(speaking));
@@ -320,6 +322,75 @@ const HALFWAY_SHOUTS = [
 /** A random high-energy halfway shout for solo mode. */
 export function halfwayShout(): string {
   return HALFWAY_SHOUTS[Math.floor(Math.random() * HALFWAY_SHOUTS.length)];
+}
+
+// Equipment-keyed shout-outs — the coach reacting to what's actually being
+// done. Optional trailing name, no vocative comma (see ENCOURAGEMENTS).
+const ACTIVITY_SHOUTS: Record<Equipment, ((n?: string) => string)[]> = {
+  dumbbells: [
+    (n) => `Keep pushing that weight${n ? ' ' + n : ''}!`,
+    (n) => `Make those dumbbells earn their keep${n ? ' ' + n : ''}!`,
+    (n) => `Heavy is the point — move it${n ? ' ' + n : ''}!`,
+    (n) => `Grip it and rip it${n ? ' ' + n : ''}!`,
+    (n) => `That iron doesn't lift itself${n ? ' ' + n : ''}!`,
+    (n) => `Squeeze the handles and drive${n ? ' ' + n : ''}!`,
+    (n) => `Own every rep of that weight${n ? ' ' + n : ''}!`,
+    (n) => `Push that weight like it owes you money${n ? ' ' + n : ''}!`,
+  ],
+  'medicine ball': [
+    (n) => `Attack that ball${n ? ' ' + n : ''}!`,
+    (n) => `Control the ball — don't let it control you${n ? ' ' + n : ''}!`,
+    (n) => `Make that ball work${n ? ' ' + n : ''}!`,
+    (n) => `Squeeze that ball like it insulted you${n ? ' ' + n : ''}!`,
+    (n) => `Every rep sharper than the last${n ? ' ' + n : ''}!`,
+    (n) => `That ball is your engine — rev it${n ? ' ' + n : ''}!`,
+  ],
+  bodyweight: [
+    (n) => `Just you and gravity — beat it${n ? ' ' + n : ''}!`,
+    (n) => `No kit, no excuses${n ? ' ' + n : ''}!`,
+    (n) => `Your body is the machine — run it hot${n ? ' ' + n : ''}!`,
+    (n) => `Nothing to blame but gravity${n ? ' ' + n : ''}!`,
+    (n) => `Move that body like you mean it${n ? ' ' + n : ''}!`,
+    (n) => `You carry the load — carry it proud${n ? ' ' + n : ''}!`,
+  ],
+};
+
+/** A random shout keyed to the exercise's equipment; optional trailing name. */
+export function activityShout(equipment: Equipment, name?: string): string {
+  const pool = ACTIVITY_SHOUTS[equipment];
+  return pool[Math.floor(Math.random() * pool.length)](name);
+}
+
+/** A mid-set form callout: one of the exercise's cues, shouted. */
+export function formShout(cues: string[], name?: string): string {
+  const c = cues[Math.floor(Math.random() * cues.length)];
+  return `${c.charAt(0).toUpperCase()}${c.slice(1)}${name ? ' ' + name : ''}!`;
+}
+
+// Collective terms — the coach addressing the whole session rather than one
+// person. Kept separate from ENCOURAGEMENTS because those require a name.
+const TEAM_NAMES = ['team', 'everyone', 'all of you', 'you lot'];
+
+// Trailing collective flows without a vocative comma, same as ENCOURAGEMENTS.
+const TEAM_SHOUTS: ((t: string) => string)[] = [
+  (t) => `Go ${t}!`,
+  (t) => `Come on ${t} — we've got this!`,
+  (t) => `Together now ${t} — drive!`,
+  (t) => `That's it ${t} — keep it moving!`,
+  (t) => `All in ${t} — no passengers!`,
+  (t) => `Push as one ${t}!`,
+  (t) => `Stronger together ${t} — go!`,
+  (t) => `Keep each other honest ${t}!`,
+  (t) => `One pace ${t} — full gas!`,
+  (t) => `Carry each other ${t} — big effort!`,
+  (t) => `Make some noise ${t}!`,
+  (t) => `Finish this together ${t}!`,
+];
+
+/** A random collective shout. Pass a label to address a specific group. */
+export function teamShout(label?: string): string {
+  const t = label ?? TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)];
+  return TEAM_SHOUTS[Math.floor(Math.random() * TEAM_SHOUTS.length)](t);
 }
 
 // Generic mid-set push shouts — no positional wording, fire anywhere in a set.

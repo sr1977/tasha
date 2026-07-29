@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { encouragement, pickCalloutSlots, pickVoice } from '../src/audio';
+import { activityShout, encouragement, formShout, pickCalloutSlots, pickVoice, teamShout } from '../src/audio';
+import { SEED_POOL } from '../src/seed';
 
 describe('pickCalloutSlots', () => {
   it('gives a short set one shout-out and a long set two', () => {
@@ -70,5 +71,69 @@ describe('pickVoice', () => {
 describe('encouragement', () => {
   it('always names the person', () => {
     for (let i = 0; i < 50; i++) expect(encouragement('Steve')).toContain('Steve');
+  });
+});
+
+describe('activityShout', () => {
+  it('returns a non-empty line for every equipment kind', () => {
+    for (const eq of ['bodyweight', 'dumbbells', 'medicine ball'] as const) {
+      expect(activityShout(eq).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('appends the name with no vocative comma', () => {
+    const s = activityShout('dumbbells', 'Steve');
+    expect(s).toContain(' Steve');
+    expect(s).not.toContain(', Steve');
+  });
+
+  it('omits the name cleanly when none given', () => {
+    for (let i = 0; i < 50; i++) expect(activityShout('dumbbells')).not.toContain('undefined');
+  });
+
+  it('varies its line rather than repeating one', () => {
+    const seen = new Set(Array.from({ length: 200 }, () => activityShout('dumbbells')));
+    expect(seen.size).toBeGreaterThan(3);
+  });
+});
+
+describe('formShout', () => {
+  it('shouts one of the given cues, capitalized', () => {
+    const s = formShout(['drive through the heels']);
+    expect(s).toBe('Drive through the heels!');
+  });
+
+  it('appends the name with no vocative comma', () => {
+    const s = formShout(['chin off your chest'], 'Steve');
+    expect(s).toBe('Chin off your chest Steve!');
+  });
+
+  it('varies across the supplied cues', () => {
+    const cues = ['a', 'b', 'c'];
+    const seen = new Set(Array.from({ length: 100 }, () => formShout(cues)));
+    expect(seen.size).toBe(3);
+  });
+
+  it('every seed exercise offers at least 3 form cues', () => {
+    for (const e of SEED_POOL) {
+      expect([e.cue, ...(e.cues ?? [])].filter(Boolean).length, e.name).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('teamShout', () => {
+  it('addresses the group, not a person', () => {
+    const s = teamShout();
+    expect(s.length).toBeGreaterThan(0);
+    expect(['team', 'everyone', 'all of you', 'you lot'].some((t) => s.includes(t))).toBe(true);
+  });
+
+  it('uses a supplied label verbatim', () => {
+    expect(teamShout('Steve, Rebecca')).toContain('Steve, Rebecca');
+  });
+
+  it('varies its line rather than repeating one', () => {
+    const seen = new Set(Array.from({ length: 200 }, () => teamShout('X')));
+    expect(seen.size).toBeGreaterThan(3);
   });
 });
