@@ -12,8 +12,9 @@ const ex = (id: string, category: Category): Exercise => ({
 
 const stations = [ex('u1', 'upper'), ex('l1', 'lower'), ex('c1', 'core')];
 
-// 3 stations, roundLength 3*(40+20)+60 = 240s; 10 min => 2 rounds
-const settings: Settings = { workSecs: 40, restSecs: 20, stations: 3, roundRestSecs: 60, totalMins: 10 };
+// 3 stations, roundLength 3*(40+20)+60 = 240s; 12 min minus the ~205s
+// warm-up/cool-down overhead => 2 rounds
+const settings: Settings = { workSecs: 40, restSecs: 20, stations: 3, roundRestSecs: 60, totalMins: 12 };
 const session = buildSession([stations], settings);
 // restSecs 0: rest intervals exist but are zero-length (the timer skips them)
 const noGaps = buildSession([stations], { ...settings, restSecs: 0 });

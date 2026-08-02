@@ -25,7 +25,7 @@ describe('createDucker', () => {
     d.duck(0.5, 1300); // countdown beep landing mid-sentence
     vi.advanceTimersByTime(5000); // longer than any timed dip
     expect(volumes.at(-1)).toBe(held);
-    expect(held).toBeLessThan(0.1);
+    expect(held).toBeLessThan(WORK_VOLUME);
     d.releaseSpeech();
     expect(volumes.at(-1)).toBe(WORK_VOLUME);
   });
@@ -41,7 +41,7 @@ describe('createDucker', () => {
     const { volumes, d } = setup();
     d.holdForSpeech();
     d.setBase(0.35);
-    expect(volumes.at(-1)).toBeLessThan(0.1);
+    expect(volumes.at(-1)).toBeLessThan(0.35);
     d.releaseSpeech();
     expect(volumes.at(-1)).toBe(0.35);
   });

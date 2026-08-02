@@ -23,6 +23,12 @@ export interface PartnerConfig {
   groups: string[][];
 }
 
+export interface FocusConfig {
+  category: Category;
+  /** 0–100: how hard to lean. 0 = even split, 100 = the focused category only. */
+  lean: number;
+}
+
 export interface Settings {
   workSecs: number;
   restSecs: number;
@@ -33,8 +39,8 @@ export interface Settings {
   distinctRounds?: number;
   /** 0–1: chance the late-set callout is a drill-sergeant jab instead of encouragement. */
   nasty?: number;
-  /** Categories the work stations draw from. Undefined, empty or all = everything. */
-  focus?: Category[];
+  /** Category emphasis for the work stations. Undefined = even split. */
+  focus?: FocusConfig;
   partner?: PartnerConfig;
   /** All known people, assigned or not. */
   roster?: string[];
@@ -43,7 +49,7 @@ export interface Settings {
 export const DEFAULT_ROSTER = ['Steve', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny'];
 
 export const DEFAULT_SETTINGS: Settings = {
-  workSecs: 40,
+  workSecs: 60,
   restSecs: 20,
   stations: 6,
   roundRestSecs: 60,

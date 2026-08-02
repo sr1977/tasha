@@ -14,7 +14,7 @@ export const DIP_VOLUME = 0.35;
 const AUTH_KEY = 'tasha.spotify.auth';
 const ERROR_KEY = 'tasha.spotify.error';
 const VERIFIER_KEY = 'tasha.spotify.verifier';
-const DUCK_VOLUME = 0.07; // near-silent while the coach is speaking
+const DUCK_VOLUME = 0.3; // dipped but still present while the coach is speaking
 const DUCK_MS = 2500;
 const SPEECH_HOLD_MAX_MS = 25_000; // backstop if a speech-end event never arrives
 const PLAYLISTS_KEY = 'tasha.spotify.playlists';
@@ -22,8 +22,8 @@ const ACTIVE_KEY = 'tasha.spotify.active';
 
 /**
  * Music volume policy. A speech hold outranks every timed dip: while the coach
- * has the floor the music stays near-silent, and only the end of speech (or the
- * backstop) brings it back — a beep or a fetch bridge can't fade it up early.
+ * has the floor the music stays dipped, and only the end of speech (or the
+ * backstop) brings it back — a countdown beep can't fade it up early.
  */
 export function createDucker(setVolume: (v: number) => void) {
   let base = WORK_VOLUME;
@@ -231,9 +231,16 @@ export async function getAccessToken(): Promise<string | null> {
 
 // ---------- playlist persistence ----------
 
+// Seeded on first run so a fresh browser starts with the household set.
+// Deleting them all sticks ("[]" in storage beats the defaults).
+const DEFAULT_PLAYLISTS: SpotifyPlaylist[] = [
+  { id: '9737755b-660d-40b5-bb54-73622c011e2c', name: '90s Workout', uri: 'spotify:playlist:37i9dQZF1DXdMm3yYbD7IO' },
+  { id: '60bac800-9983-43bd-9619-8810fb125f5f', name: 'Workout 120bpm', uri: 'spotify:playlist:1vdkPd9esYFohPkUxcrUDa' },
+];
+
 export function loadPlaylists(): SpotifyPlaylist[] {
-  const p = loadJson<unknown>(PLAYLISTS_KEY, []);
-  return Array.isArray(p) ? (p as SpotifyPlaylist[]) : [];
+  const p = loadJson<unknown>(PLAYLISTS_KEY, null);
+  return Array.isArray(p) ? (p as SpotifyPlaylist[]) : DEFAULT_PLAYLISTS;
 }
 
 export function savePlaylists(p: SpotifyPlaylist[]): void {

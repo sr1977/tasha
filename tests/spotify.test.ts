@@ -12,6 +12,7 @@ import {
   challenge,
   cooldownPlaylist,
   generateVerifier,
+  loadPlaylists,
   parsePlaylistInput,
   saveActiveId,
   savePlaylists,
@@ -86,9 +87,15 @@ describe('activePlaylist', () => {
     expect(activePlaylist()).toEqual(playlists[0]);
   });
 
-  it('returns null when no playlists exist', () => {
+  it('returns null when the playlist list was emptied', () => {
+    savePlaylists([]);
     saveActiveId('a');
     expect(activePlaylist()).toBeNull();
+  });
+
+  it('seeds the default playlists on a fresh store', () => {
+    const names = loadPlaylists().map((p) => p.name);
+    expect(names).toEqual(['90s Workout', 'Workout 120bpm']);
   });
 });
 

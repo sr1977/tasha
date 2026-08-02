@@ -10,7 +10,9 @@ import {
   groupExercises,
   stationsForRound,
   spaceEquipment,
-  focusPool,
+  focusSlots,
+  stationSplit,
+  OVERHEAD_SECS,
   PREP_SECS,
 } from '../src/generator';
 import { DEFAULT_SETTINGS, type Category, type Equipment, type Exercise, type Settings } from '../src/types';
@@ -28,13 +30,20 @@ const pool: Exercise[] = [
   ex('c1', 'core'), ex('c2', 'core'),
 ];
 
-// 2 stations, work 5, rest 3, round rest 7 => roundLength 23; 1 min target => 2 rounds
-const small: Settings = { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 };
+// 2 stations, work 5, rest 3, round rest 7 => roundLength 23; target covers
+// the warm-up/cool-down overhead plus exactly two rounds
+const small: Settings = {
+  workSecs: 5,
+  restSecs: 3,
+  stations: 2,
+  roundRestSecs: 7,
+  totalMins: (OVERHEAD_SECS + 2 * 23) / 60,
+};
 
 describe('roundCount', () => {
-  it('computes rounds from the spec formula', () => {
-    // 6*(40+20)+60 = 420; floor(2700/420) = 6
-    expect(roundCount(DEFAULT_SETTINGS)).toBe(6);
+  it('computes rounds from the spec formula, net of the bookend overhead', () => {
+    // 6*(60+20)+60 = 540; floor((2700 - OVERHEAD) / 540) = 4
+    expect(roundCount(DEFAULT_SETTINGS)).toBe(4);
     expect(roundCount(small)).toBe(2);
   });
 
@@ -160,7 +169,7 @@ describe('replaceInSession', () => {
   const a = exp('a', 'upper');
   const b = exp('b', 'lower');
   const z = exp('z', 'upper');
-  const session = buildSession([[a, b]], { workSecs: 5, restSecs: 3, stations: 2, roundRestSecs: 7, totalMins: 1 });
+  const session = buildSession([[a, b]], small);
   // kinds: prep, warmup×5, rest(gap)@6, work(a)@7, rest(->b)@8, work(b)@9, roundRest(->a)@10, work(a)@11, rest(->b)@12, work(b)@13, cooldown×4
 
   it('swaps only intervals after fromIndex', () => {
@@ -240,30 +249,62 @@ describe('focus', () => {
     ex('c1', 'core'), ex('c2', 'core'),
   ];
 
-  it('treats undefined, empty and all-three as everything', () => {
-    expect(focusPool(mixed, undefined)).toEqual(mixed);
-    expect(focusPool(mixed, [])).toEqual(mixed);
-    expect(focusPool(mixed, ['upper', 'lower', 'core'])).toEqual(mixed);
+  it('splits evenly with no focus', () => {
+    expect(stationSplit(6)).toEqual({ upper: 2, lower: 2, core: 2 });
   });
 
-  it('keeps only the focused categories', () => {
-    expect(focusPool(mixed, ['upper']).map((e) => e.id)).toEqual(['u1', 'u2']);
-    expect(focusPool(mixed, ['upper', 'core']).map((e) => e.id)).toEqual(['u1', 'u2', 'c1', 'c2']);
+  it('lean 0 matches the even split', () => {
+    expect(stationSplit(6, { category: 'core', lean: 0 })).toEqual({ upper: 2, lower: 2, core: 2 });
   });
 
-  it('falls back to the whole pool when the focus matches nothing', () => {
-    expect(focusPool([ex('u1', 'upper')], ['core'])).toHaveLength(1);
+  it('mid lean tilts toward the focused category, keeping the others in', () => {
+    const s = stationSplit(6, { category: 'core', lean: 50 });
+    expect(s.core).toBeGreaterThan(s.upper);
+    expect(s.upper).toBeGreaterThan(0);
+    expect(s.lower).toBeGreaterThan(0);
+    expect(s.upper + s.lower + s.core).toBe(6);
   });
 
-  it('generates work stations only from the focused categories', () => {
-    const session = generateSession(mixed, { ...small, focus: ['core'] });
+  it('full lean is the focused category only', () => {
+    expect(stationSplit(6, { category: 'core', lean: 100 })).toEqual({ upper: 0, lower: 0, core: 6 });
+  });
+
+  it('always sums to the station count, even at awkward sizes', () => {
+    for (const stations of [2, 3, 4, 5, 7]) {
+      for (const lean of [0, 30, 50, 70, 100]) {
+        const s = stationSplit(stations, { category: 'lower', lean });
+        expect(s.upper + s.lower + s.core).toBe(stations);
+      }
+    }
+  });
+
+  it('focusSlots deals the split as an interleaved category sequence', () => {
+    const slots = focusSlots(6, { category: 'core', lean: 100 });
+    expect(slots).toEqual(['core', 'core', 'core', 'core', 'core', 'core']);
+    const even = focusSlots(6);
+    expect(even.filter((c) => c === 'upper')).toHaveLength(2);
+    expect(even.filter((c) => c === 'core')).toHaveLength(2);
+  });
+
+  it('generates work stations only from the focused category at full lean', () => {
+    const session = generateSession(mixed, { ...small, focus: { category: 'core', lean: 100 } });
     const works = session.filter((i) => i.kind === 'work');
     expect(works.length).toBeGreaterThan(0);
     expect(works.every((i) => i.exercise!.category === 'core')).toBe(true);
   });
 
+  it('keeps every category in the mix at moderate lean', () => {
+    const session = generateSession(mixed, {
+      ...small,
+      stations: 6,
+      focus: { category: 'core', lean: 50 },
+    });
+    const cats = new Set(session.filter((i) => i.kind === 'work').map((i) => i.exercise!.category));
+    expect(cats).toEqual(new Set(['upper', 'lower', 'core']));
+  });
+
   it('leaves the warm-up and cool-down full-body', () => {
-    const session = generateSession(mixed, { ...small, focus: ['core'] });
+    const session = generateSession(mixed, { ...small, focus: { category: 'core', lean: 100 } });
     const other = session.filter((i) => i.kind === 'warmup' || i.kind === 'cooldown');
     expect(other.some((i) => i.exercise!.category !== 'core')).toBe(true);
   });

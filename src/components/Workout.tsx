@@ -167,9 +167,9 @@ export function Workout({
   // Stop any in-flight speech when the workout unmounts (e.g. user exits).
   useEffect(() => cancelSpeech, []);
 
-  // Duck follows actual speech: the fixed-length duck() after each speak() only
-  // bridges the TTS fetch; once playback starts the hold keeps the music down
-  // until the last word, so beeps and later dips can't fade it up mid-sentence.
+  // Duck follows speech: speak() raises the speaking flag the moment it's
+  // called (covering the TTS fetch) and drops it after the last word, so the
+  // hold spans the whole utterance and beeps can't fade the music up early.
   useEffect(() => {
     const cb = (speaking: boolean) => {
       const p = playerRef.current;
@@ -271,7 +271,6 @@ export function Workout({
       if (prevStatus.current !== 'done') {
         transitionTone();
         speak('Session complete. Well done!', SHOUT);
-        playerRef.current?.duck();
         prevStatus.current = 'done';
       }
       return;
@@ -283,7 +282,6 @@ export function Workout({
       transitionTone();
       const line = announcementText(state, partner);
       if (line) speak(line.text, line.shout ? SHOUT : {});
-      playerRef.current?.duck();
       if (state.status === 'running' && secsLeft >= 1 && secsLeft <= 3) {
         beep();
         playerRef.current?.duck(0.5, 1300); // dip only lightly for the countdown clicks
@@ -317,7 +315,7 @@ export function Workout({
               ? drawName(encQueueRef, people)
               : undefined;
           const cues = allCues(ex);
-          return cues.length > 0 ? formShout(cues, name) : activityShout(ex.equipment, name);
+          return cues.length > 0 ? formShout(cues, ex.name) : activityShout(ex.equipment, name);
         }
         return people.length > 0 && Math.random() < NAME_RATE ? namedOrTeam() : impersonal();
       };
@@ -334,7 +332,6 @@ export function Workout({
         // Mid-set is the one collision-free speech slot — mix it up between a
         // generic halfway shout and a named encouragement (when there's a roster).
         speak(midSetLine(halfwayShout), SHOUT);
-        playerRef.current?.duck();
       }
       // Warm-up moves get their witty jibe at the halfway point, not the
       // announce — keeps the interval-start speech short.
@@ -347,7 +344,6 @@ export function Workout({
       ) {
         halfwayRef.current = state.index;
         speak(warmupJibe(), SHOUT);
-        playerRef.current?.duck();
       }
       // Cool-down stretches work one side at a time — call the swap at halfway.
       if (
@@ -360,7 +356,6 @@ export function Workout({
       ) {
         halfwayRef.current = state.index;
         speak(cur.exercise!.category === 'upper' ? 'Switch arms' : 'Switch legs');
-        playerRef.current?.duck();
       }
       // Extra work-set callouts around the halfway call: an early spur at
       // quarter-elapsed and a late one at quarter-remaining. Long sets only —
@@ -388,7 +383,6 @@ export function Workout({
             : spur(),
           SHOUT,
         );
-        playerRef.current?.duck();
       }
       const late = Math.ceil(cur.duration / 4);
       if (
@@ -404,11 +398,10 @@ export function Workout({
         // Nasty-dial odds of a drill-sergeant jab; no roster -> cheeky vocative.
         speak(
           Math.random() < nasty
-            ? jab(people.length > 0 ? drawName(jabQueueRef, people) : undefined)
+            ? jab(people.length > 0 ? drawName(jabQueueRef, people) : undefined, nasty >= 1)
             : spur(),
           SHOUT,
         );
-        playerRef.current?.duck();
       }
     }
   });

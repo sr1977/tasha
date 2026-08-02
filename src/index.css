@@ -398,13 +398,11 @@ select {
   letter-spacing: 0.08em;
   margin-left: var(--space-sm);
 }
-.focus label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
+.focus-chip {
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  background: none;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 1rem;
@@ -413,9 +411,22 @@ select {
   color: var(--text-muted);
   cursor: pointer;
 }
-.focus label.on {
+.focus-chip.on {
   color: var(--text);
   border-color: var(--accent);
+}
+/* The lean dial is an instrument, not the hero — a fraction of the nasty knob. */
+.focus-lean .dial {
+  width: 64px;
+  height: 64px;
+}
+.focus-lean .dial .readout {
+  font-size: 30px;
+}
+/* No focus picked: the dial waits, visibly, but takes no input. */
+.focus.inert .focus-lean {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .session-actions {

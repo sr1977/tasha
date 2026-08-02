@@ -87,6 +87,15 @@ describe('storage', () => {
     expect(loadSettings().partner!.groups).toEqual(DEFAULT_SETTINGS.partner!.groups);
   });
 
+  it('migrates the old focus checklist: single tick -> full lean, else no focus', () => {
+    store.set('tasha.settings', JSON.stringify({ focus: ['core'] }));
+    expect(loadSettings().focus).toEqual({ category: 'core', lean: 100 });
+    store.set('tasha.settings', JSON.stringify({ focus: ['upper', 'lower'] }));
+    expect(loadSettings().focus).toBeUndefined();
+    store.set('tasha.settings', JSON.stringify({ focus: [] }));
+    expect(loadSettings().focus).toBeUndefined();
+  });
+
   it('defaults the roster when missing or malformed', () => {
     store.set('tasha.settings', JSON.stringify({ roster: 'nope' }));
     expect(loadSettings().roster).toEqual(DEFAULT_ROSTER);

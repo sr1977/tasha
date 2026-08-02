@@ -2,6 +2,8 @@ import type { Category, Equipment, Exercise } from './types';
 
 // Each exercise carries a list of form cues: the first is the headline cue
 // (shown on screen, read with "next up"), the rest feed mid-set form callouts.
+// Every cue is a mid-exercise reminder — a short correction you'd shout at
+// someone already doing the move — never a how-to instruction.
 const raw: [string, Category, Equipment, string[]][] = [
   ['Push-ups', 'upper', 'bodyweight', [
     'keep your body in a straight line',
@@ -134,6 +136,36 @@ const raw: [string, Category, Equipment, string[]][] = [
     'hips face forward, twist the ribs',
     'controlled power — no throwing it around',
     'breathe out on every twist',
+  ]],
+  ['RDL', 'lower', 'dumbbells', [
+    'hinge at the hips — flat back, weights brushing your legs',
+    'soft knees — hinge, not squat',
+    'push the hips back, feel the hamstrings',
+    'drive the hips through at the top',
+  ]],
+  ['Wide push-ups', 'upper', 'bodyweight', [
+    'hands wide, chest all the way to the floor',
+    'body in one straight line',
+    'elbows stacked over the wrists',
+    'full lockout at the top',
+  ]],
+  ['Mountain climbers', 'core', 'bodyweight', [
+    'drive the knees fast, hips down',
+    'shoulders stacked over the wrists',
+    'quick feet — like the floor is hot',
+    'core braced — no bouncing hips',
+  ]],
+  ['Hollow hold', 'core', 'bodyweight', [
+    'lower back glued to the floor',
+    'arms and legs long and lifted',
+    'ribs down, squeeze the middle',
+    "breathe — don't hold your breath",
+  ]],
+  ['Ball squat to press', 'lower', 'medicine ball', [
+    'squat deep, punch the ball to the ceiling',
+    'drive through the heels into the press',
+    'chest up, ball tight on the way down',
+    'one flowing move — no pausing halfway',
   ]],
 ];
 

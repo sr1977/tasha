@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { activityShout, encouragement, formShout, pickCalloutSlots, pickVoice, teamShout } from '../src/audio';
+import { activityShout, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, VOCATIVES } from '../src/audio';
 import { SEED_POOL } from '../src/seed';
+
+describe('jab evil gating', () => {
+  const evilLines = EVIL_JABS.map((f) => f('Steve'));
+
+  it('draws exclusively from the evil pool in evil mode', () => {
+    for (let i = 0; i < 200; i++) {
+      expect(evilLines).toContain(jab('Steve', true));
+    }
+  });
+
+  it('never returns an evil line outside evil mode', () => {
+    for (let i = 0; i < 200; i++) {
+      expect(evilLines).not.toContain(jab('Steve'));
+    }
+  });
+
+  it('uses a solo vocative in evil mode when no name is given', () => {
+    const soloEvil = VOCATIVES.flatMap((n) => EVIL_JABS.map((f) => f(n)));
+    for (let i = 0; i < 50; i++) {
+      expect(soloEvil).toContain(jab(undefined, true));
+    }
+  });
+});
 
 describe('pickCalloutSlots', () => {
   it('gives a short set one shout-out and a long set two', () => {
@@ -103,9 +126,9 @@ describe('formShout', () => {
     expect(s).toBe('Drive through the heels!');
   });
 
-  it('appends the name with no vocative comma', () => {
-    const s = formShout(['chin off your chest'], 'Steve');
-    expect(s).toBe('Chin off your chest Steve!');
+  it('names the exercise when given one', () => {
+    const s = formShout(['keep the arms locked'], 'Chest Press');
+    expect(s).toBe('On the chest press — Keep the arms locked!');
   });
 
   it('varies across the supplied cues', () => {

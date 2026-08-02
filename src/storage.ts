@@ -1,4 +1,4 @@
-import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Exercise, type Session, type Settings } from './types';
+import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from './types';
 import { SEED_POOL } from './seed';
 
 const POOL_KEY = 'tasha.pool';
@@ -50,7 +50,10 @@ export function loadPool(): Exercise[] {
   if (mark >= SEED_POOL.length) return pool;
   // Persist straight away: the mark may only advance once the merge is durable,
   // or a load-without-save would lose the additions and never offer them again.
-  const merged = [...pool, ...SEED_POOL.slice(mark)];
+  // Skip additions whose name the pool already has — a user-created exercise
+  // that later graduates into the seed must not arrive as a duplicate.
+  const names = new Set(pool.map((e) => e.name.trim().toLowerCase()));
+  const merged = [...pool, ...SEED_POOL.slice(mark).filter((e) => !names.has(e.name.trim().toLowerCase()))];
   savePool(merged);
   return merged;
 }
@@ -64,6 +67,15 @@ export function loadSettings(): Settings {
   const parsed = loadJson<unknown>(SETTINGS_KEY, {});
   const partial = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Settings>) : {};
   const s = { ...DEFAULT_SETTINGS, ...partial };
+  // Focus used to be a category checklist. A single tick was exclusive (only
+  // that category) -> full lean on it; anything else has no equivalent -> even.
+  if (Array.isArray(s.focus)) {
+    const cats = s.focus as unknown as string[];
+    s.focus =
+      cats.length === 1 && ['upper', 'lower', 'core'].includes(cats[0])
+        ? { category: cats[0] as Category, lean: 100 }
+        : undefined;
+  }
   if (!Array.isArray(s.roster) || !s.roster.every((n) => typeof n === 'string')) {
     s.roster = DEFAULT_ROSTER;
   }

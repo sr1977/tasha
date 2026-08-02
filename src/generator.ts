@@ -1,4 +1,4 @@
-import type { Category, Exercise, Session, Settings } from './types';
+import type { Category, Exercise, FocusConfig, Session, Settings } from './types';
 
 export const PREP_SECS = 10;
 
@@ -34,9 +34,19 @@ export const COOLDOWN_MOVES: Exercise[] = [
 
 export const CATEGORY_ORDER: Category[] = ['upper', 'lower', 'core'];
 
+// Fixed bookend time — prep, warm-up, breather, cool-down — the same for
+// every session. Round budgeting spends what's left of the target after this,
+// so the target length covers the whole session, not just the work rounds.
+export const OVERHEAD_SECS =
+  PREP_SECS +
+  WARMUP_MOVES.length * WARMUP_SECS +
+  WARMUP_GAP_SECS +
+  COOLDOWN_GAP_SECS +
+  COOLDOWN_MOVES.length * COOLDOWN_SECS;
+
 export function roundCount(s: Settings): number {
   const roundLength = s.stations * (s.workSecs + s.restSecs) + s.roundRestSecs;
-  return Math.max(1, Math.floor((s.totalMins * 60) / roundLength));
+  return Math.max(1, Math.floor((s.totalMins * 60 - OVERHEAD_SECS) / roundLength));
 }
 
 function shuffle<T>(items: T[], rand: () => number): T[] {
@@ -49,20 +59,46 @@ function shuffle<T>(items: T[], rand: () => number): T[] {
 }
 
 /**
- * Narrow the pool to the focused categories. Undefined, empty or all-three mean
- * everything — and a focus that matches nothing falls back to the whole pool,
- * since a full-body session beats no session at all.
+ * How many stations each category gets. No focus = even thirds. With a focus,
+ * the focused share ramps linearly from 1/3 (lean 0) to all of it (lean 100);
+ * the others split what's left. Largest-remainder rounding to whole stations.
  */
-export function focusPool(pool: Exercise[], focus?: Category[]): Exercise[] {
-  if (!focus || focus.length === 0 || focus.length >= CATEGORY_ORDER.length) return pool;
-  const kept = pool.filter((e) => focus.includes(e.category));
-  return kept.length > 0 ? kept : pool;
+export function stationSplit(stations: number, focus?: FocusConfig): Record<Category, number> {
+  const f = focus ? Math.max(0, Math.min(100, focus.lean)) / 100 : 0;
+  const focusedShare = 1 / 3 + (f * 2) / 3;
+  const otherShare = (1 - focusedShare) / (CATEGORY_ORDER.length - 1);
+  const exact = CATEGORY_ORDER.map((c) => ({
+    c,
+    x: stations * (focus ? (c === focus.category ? focusedShare : otherShare) : 1 / 3),
+  }));
+  const counts = Object.fromEntries(exact.map(({ c, x }) => [c, Math.floor(x)])) as Record<Category, number>;
+  let left = stations - exact.reduce((sum, { x }) => sum + Math.floor(x), 0);
+  const byRemainder = [...exact].sort((a, b) => (b.x % 1) - (a.x % 1));
+  for (let i = 0; left > 0; i++, left--) counts[byRemainder[i % byRemainder.length].c]++;
+  return counts;
+}
+
+/** The per-station category sequence for one round, interleaved. */
+export function focusSlots(stations: number, focus?: FocusConfig): Category[] {
+  const remaining = stationSplit(stations, focus);
+  const slots: Category[] = [];
+  while (slots.length < stations) {
+    for (const c of CATEGORY_ORDER) {
+      if (slots.length < stations && remaining[c] > 0) {
+        slots.push(c);
+        remaining[c]--;
+      }
+    }
+  }
+  return slots;
 }
 
 export function pickStations(
   pool: Exercise[],
   count: number,
   rand: () => number = Math.random,
+  /** Category per pick; unset picks cycle categories evenly. */
+  slots?: Category[],
 ): Exercise[] {
   if (pool.length === 0) throw new Error('empty pool');
   const allowed = pool.filter((e) => e.pref !== 'ban');
@@ -81,7 +117,9 @@ export function pickStations(
   const picks: Exercise[] = [];
   let ci = 0;
   while (picks.length < count) {
-    const cat = cats[ci % cats.length];
+    // A slot whose category has no exercises falls back to the even cycle.
+    const want = slots?.[picks.length];
+    const cat = want && byCat.has(want) ? want : cats[ci % cats.length];
     const items = byCat.get(cat)!;
     const i = nextIdx.get(cat)!;
     picks.push(items[i % items.length]); // wraps => reuse when pool is small
@@ -198,8 +236,11 @@ export function pickRoundSets(
   numSets: number,
   count: number,
   rand: () => number = Math.random,
+  focus?: FocusConfig,
 ): Exercise[][] {
-  const all = pickStations(pool, stationsPerRound * numSets, rand);
+  // Same category quota every round: repeat one round's slot list per set.
+  const slots = Array.from({ length: numSets }, () => focusSlots(stationsPerRound, focus)).flat();
+  const all = pickStations(pool, stationsPerRound * numSets, rand, slots);
   return Array.from({ length: numSets }, (_, k) =>
     spaceEquipment(all.slice(k * stationsPerRound, (k + 1) * stationsPerRound), pool, count, rand),
   );
@@ -212,9 +253,8 @@ export function generateSession(
 ): Session {
   const count = s.partner?.on ? s.partner.groups.length : 1;
   const numSets = Math.max(1, Math.min(s.distinctRounds ?? 1, roundCount(s)));
-  // Work stations only — the warm-up and cool-down stay full-body whatever the focus.
-  const focused = focusPool(pool, s.focus);
-  return buildSession(pickRoundSets(focused, s.stations, numSets, count, rand), s);
+  // Focus shapes the work stations only — warm-up and cool-down stay full-body.
+  return buildSession(pickRoundSets(pool, s.stations, numSets, count, rand, s.focus), s);
 }
 
 export function sessionDuration(session: Session): number {

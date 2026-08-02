@@ -43,15 +43,17 @@ export function transitionTone(): void {
   tone(1320, 400);
 }
 
+// No volume option: the coach always speaks at maximum — both playback paths
+// pin volume to 1 in speak()/speakLocal().
 export interface SpeakOpts {
   rate?: number;
   pitch?: number;
-  volume?: number;
 }
 
 // Punchier delivery for the loud moments (work "Go!", encouragements, finish):
-// faster + higher pitch reads as an energetic shout. Volume is already maxed.
-export const SHOUT: SpeakOpts = { rate: 1.15, pitch: 1.3 };
+// higher pitch reads as an energetic shout. Rate stays at 1 — faster delivery
+// sounded rushed and muddied the words. Volume is already maxed.
+export const SHOUT: SpeakOpts = { pitch: 1.3 };
 
 // ---------- Google Cloud TTS (Chirp 3: HD) ----------
 
@@ -120,6 +122,27 @@ async function fetchTtsBlob(text: string, rate: number, key: string): Promise<Bl
   return blob;
 }
 
+// Element volume caps at 1.0 — to go louder the clip must route through the
+// WebAudio graph. Compressor tames the peaks the boost would otherwise clip.
+// ponytail: fixed 2x boost, make it a setting if it ever needs tuning.
+const VOICE_BOOST = 2;
+
+function boostVoice(a: HTMLAudioElement): void {
+  // A suspended context would silence the element entirely (the graph becomes
+  // its only output) — skip the boost and play plain rather than risk that.
+  if (!ctx || ctx.state !== 'running') return;
+  try {
+    const gain = ctx.createGain();
+    gain.gain.value = VOICE_BOOST;
+    const comp = ctx.createDynamicsCompressor();
+    ctx.createMediaElementSource(a).connect(gain);
+    gain.connect(comp);
+    comp.connect(ctx.destination);
+  } catch {
+    // graph hookup failed -> element plays at normal volume
+  }
+}
+
 function stopPlayback(): void {
   utteranceGen++; // orphan in-flight fetches and stale utterance callbacks
   try {
@@ -142,6 +165,10 @@ export function speak(text: string, opts: SpeakOpts = {}): void {
   }
   stopPlayback();
   const gen = ++utteranceGen;
+  // Hold the music down from the moment speech is requested — a slow TTS
+  // fetch must not let it fade back up before the voice even starts. The
+  // ducker's backstop releases the hold if playback never materialises.
+  speechListener(true);
   fetchTtsBlob(text, opts.rate ?? 1, key)
     // One retry absorbs transient API blips before dropping to the robot voice.
     .catch(() => fetchTtsBlob(text, opts.rate ?? 1, key))
@@ -150,7 +177,8 @@ export function speak(text: string, opts: SpeakOpts = {}): void {
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
       currentAudio = a;
-      if (opts.volume !== undefined) a.volume = opts.volume;
+      a.volume = 1;
+      boostVoice(a);
       const expire = () => {
         if (gen === utteranceGen) speechListener(false);
       };
@@ -185,10 +213,12 @@ function speakLocal(text: string, opts: SpeakOpts = {}): void {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const gen = ++utteranceGen;
+    // Chrome's network voices can take a beat to start — hold the music now.
+    speechListener(true);
     const u = new SpeechSynthesisUtterance(text);
     if (opts.rate !== undefined) u.rate = opts.rate;
     if (opts.pitch !== undefined) u.pitch = opts.pitch;
-    if (opts.volume !== undefined) u.volume = opts.volume;
+    u.volume = 1;
     const voice = pickVoice(listVoices(), getVoiceName());
     if (voice) u.voice = voice;
     // Chrome (especially with Google network voices) sometimes never fires
@@ -274,35 +304,58 @@ export function encouragement(name: string): string {
 
 // Drill-sergeant jabs — parade-ground bark, British seasoning, household-safe.
 const JABS = [
-  (n: string) => `${n}! You call that effort? My nan hits harder and she's DECEASED!`,
-  (n: string) => `Move it, ${n}! You're slower than a Sunday bus replacement service!`,
-  (n: string) => `${n}, are you tired? Tired is a STATE OF MIND — now SHIFT!`,
-  (n: string) => `Oh, I'm sorry ${n}, did I interrupt your ELEVENSES?`,
-  (n: string) => `${n}! I've seen pond scum with more fight in it!`,
-  (n: string) => `What in the name of the King was THAT, ${n}?`,
-  (n: string) => `${n}, you'd better unscrew your head and screw it back on RIGHT!`,
-  (n: string) => `Is that sweat, ${n}, or are you just CRYING?`,
-  (n: string) => `${n}! The only thing you're working hard at is DISAPPOINTING me!`,
-  (n: string) => `Pick it up, ${n}! This isn't a garden fete, PRINCESS!`,
-  (n: string) => `${n}, I have seen shop dummies with better form — and they're PLASTIC!`,
-  (n: string) => `Start moving, ${n}, or I will PERSONALLY march you to the car park!`,
-  (n: string) => `${n}! You're moving like the back end of a pantomime horse!`,
-  (n: string) => `Do you need a WRITTEN INVITATION, ${n}? SHIFT!`,
-  (n: string) => `${n}, if lazing about was an Olympic sport you'd bring home GOLD!`,
-  (n: string) => `I've seen snails lap you TWICE, ${n}!`,
-  (n: string) => `${n}! Stop faffing about before I make faffing ILLEGAL!`,
-  (n: string) => `Outstanding, ${n} — outstandingly PATHETIC! Now GO!`,
-  (n: string) => `${n}, you move like you're wading through cold PORRIDGE!`,
-  (n: string) => `Lock it in, ${n}! The queue at the post office moves faster than you!`,
+  (n: string) => `${n}! My gran does faster reps and she queues for FUN!`,
+  (n: string) => `Get a wiggle on, ${n}! Even the M25 moves quicker than that!`,
+  (n: string) => `${n}, is that a rest? Nobody AUTHORISED a rest!`,
+  (n: string) => `Wakey wakey, ${n} — this is a workout, not an AUDIOBOOK!`,
+  (n: string) => `${n}! I've seen wet lettuce put up more of a fight!`,
+  (n: string) => `Was that a repetition, ${n}, or an INTERPRETIVE DANCE?`,
+  (n: string) => `${n}, my TEA has gone cold watching you dither!`,
+  (n: string) => `Are you exercising, ${n}, or auditioning for a NAP?`,
+  (n: string) => `${n}! You've got the urgency of a bank holiday POST OFFICE!`,
+  (n: string) => `Chop chop, ${n}! This isn't a spa day, SUNBEAM!`,
+  (n: string) => `${n}, scarecrows have better posture — and they're full of STRAW!`,
+  (n: string) => `Shift yourself, ${n}, before I fetch the AIR HORN!`,
+  (n: string) => `${n}! You're flapping about like a deckchair in a GALE!`,
+  (n: string) => `Shall I send a POSTCARD when it's time to move, ${n}?`,
+  (n: string) => `${n}, if dawdling paid wages you'd be a MILLIONAIRE!`,
+  (n: string) => `The kettle boils faster than you warm up, ${n}!`,
+  (n: string) => `${n}! Less dithering, more DELIVERING!`,
+  (n: string) => `Marvellous, ${n} — a masterclass in going NOWHERE! Now GO!`,
+  (n: string) => `${n}, you're creaking about like a HAUNTED WHEELBARROW!`,
+  (n: string) => `Get after it, ${n}! Paint dries with more AMBITION!`,
 ];
 
-// Stand-in targets when no roster name is available (solo mode).
-const VOCATIVES = ['sunshine', 'princess', 'champ', 'sleeping beauty', 'your majesty', 'buttercup'];
+// Evil-mode jabs — properly acerbic. ONLY reachable when the nasty dial is
+// maxed (EVIL MODE); jab() must never draw these otherwise.
+export const EVIL_JABS = [
+  (n: string) => `${n}! The floor is filing a COMPLAINT about the load-bearing work!`,
+  (n: string) => `Move, ${n}! That belly arrived at the exercise BEFORE you did!`,
+  (n: string) => `${n}, you're not big-boned — you're LAZY with a PADDED EXCUSE!`,
+  (n: string) => `Is that a physique, ${n}, or a CRY FOR HELP in a t-shirt?`,
+  (n: string) => `${n}! Your idea of cardio is REACHING for the BISCUIT TIN!`,
+  (n: string) => `Gravity works overtime on you, ${n} — give it a HAND for once!`,
+  (n: string) => `${n}, you've got the work ethic of a DRAUGHT EXCLUDER!`,
+  (n: string) => `The sofa has a RESTRAINING ORDER out on you, ${n} — it needs SPACE!`,
+  (n: string) => `${n}! You didn't earn that body, you ORDERED IT IN!`,
+  (n: string) => `Sweat is just fat CRYING, ${n} — so make it WEEP!`,
+  (n: string) => `${n}, your muscles filed a MISSING PERSONS report YEARS ago!`,
+  (n: string) => `Lazy? ${n}, you'd outsource BREATHING if there was an app!`,
+  (n: string) => `${n}! Every takeaway in town knows your order — let's make them FORGET!`,
+  (n: string) => `That waistline is a MONUMENT to sitting down, ${n} — DEMOLISH it!`,
+  (n: string) => `${n}, you burn fewer calories than the FRIDGE LIGHT you keep triggering!`,
+  (n: string) => `Run, ${n}! Pretend the ICE CREAM VAN is leaving!`,
+] as const;
 
-/** A random playful insult aimed at a named person (or a cheeky stand-in). */
-export function jab(name?: string): string {
+// Stand-in targets when no roster name is available (solo mode).
+export const VOCATIVES = ['sunshine', 'princess', 'champ', 'sleeping beauty', 'your majesty', 'buttercup'];
+
+/** A random playful insult aimed at a named person (or a cheeky stand-in).
+ * `evil` switches to the acerbic pool — pass true ONLY in EVIL MODE (nasty === 1). */
+export function jab(name?: string, evil = false): string {
   const n = name ?? VOCATIVES[Math.floor(Math.random() * VOCATIVES.length)];
-  return JABS[Math.floor(Math.random() * JABS.length)](n);
+  const pool = evil ? EVIL_JABS : JABS;
+  return pool[Math.floor(Math.random() * pool.length)](n);
 }
 
 // Mid-set halfway shouts — pure enthusiasm, no name needed (solo mode).
@@ -361,10 +414,12 @@ export function activityShout(equipment: Equipment, name?: string): string {
   return pool[Math.floor(Math.random() * pool.length)](name);
 }
 
-/** A mid-set form callout: one of the exercise's cues, shouted. */
-export function formShout(cues: string[], name?: string): string {
+/** A mid-set form callout: one of the exercise's cues, shouted. Names the
+ * exercise (not a person) so partners on different stations know who it's for. */
+export function formShout(cues: string[], exercise?: string): string {
   const c = cues[Math.floor(Math.random() * cues.length)];
-  return `${c.charAt(0).toUpperCase()}${c.slice(1)}${name ? ' ' + name : ''}!`;
+  const cue = `${c.charAt(0).toUpperCase()}${c.slice(1)}!`;
+  return exercise ? `On the ${exercise.toLowerCase()} — ${cue}` : cue;
 }
 
 // Collective terms — the coach addressing the whole session rather than one

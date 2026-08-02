@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from '../types';
-import { banReplacement, buildSession, CATEGORY_ORDER, focusPool, generateSession, groupLabel, roundCount, sessionDuration, stationsForRound } from '../generator';
+import { banReplacement, buildSession, CATEGORY_ORDER, generateSession, groupLabel, roundCount, sessionDuration, stationSplit, stationsForRound } from '../generator';
 import {
   getGoogleVoice,
   getVoiceName,
@@ -104,14 +104,20 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
       },
     });
 
-  // Focus: which categories the work stations draw from. All three ticked (or
-  // none) means everything, so the checkboxes read as "on" in the default state.
-  const focus = settings.focus?.length ? settings.focus : CATEGORY_ORDER;
-  const toggleFocus = (cat: Category) => {
-    const next = focus.includes(cat) ? focus.filter((c) => c !== cat) : [...focus, cat];
-    setSettings({ ...settings, focus: next.length === 0 ? undefined : next });
-  };
-  const focusedPool = focusPool(pool, settings.focus);
+  // Focus: one emphasised category plus a lean dial. Tapping the active chip
+  // deselects (back to an even split); full lean = that category only.
+  const focus = settings.focus;
+  const toggleFocus = (cat: Category) =>
+    setSettings({
+      ...settings,
+      focus: focus?.category === cat ? undefined : { category: cat, lean: focus?.lean ?? 50 },
+    });
+  const split = stationSplit(settings.stations, focus);
+  const splitText = CATEGORY_ORDER.filter((c) => split[c] > 0)
+    .map((c) => `${split[c]} ${c}`)
+    .join(' · ');
+  const leanLabel = (lean: number, cat: Category) =>
+    lean === 0 ? 'even split' : lean < 50 ? `leaning ${cat}` : lean < 100 ? `mostly ${cat}` : `all ${cat}`;
 
   // Wipes the locked-in session and the session numbers. The roster and group
   // assignments are the household's, not this session's — they survive.
@@ -186,23 +192,28 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           {num('totalMins', 'Target length (minutes)', 5)}
           {num('distinctRounds', 'Distinct rounds', 1)}
         </div>
-        <div className="focus">
+        <div className={`focus${focus ? '' : ' inert'}`}>
           <span className="focus-kicker">Focus</span>
           {CATEGORY_ORDER.map((cat) => (
-            <label key={cat} className={focus.includes(cat) ? 'on' : ''}>
-              <input
-                type="checkbox"
-                checked={focus.includes(cat)}
-                onChange={() => toggleFocus(cat)}
-              />
+            <button
+              key={cat}
+              type="button"
+              className={`focus-chip${focus?.category === cat ? ' on' : ''}`}
+              aria-pressed={focus?.category === cat}
+              onClick={() => toggleFocus(cat)}
+            >
               {cat}
-            </label>
+            </button>
           ))}
-          <span className="focus-hint">
-            {focus.length === CATEGORY_ORDER.length
-              ? 'Everything'
-              : `${focusedPool.length} exercises in focus`}
-          </span>
+          <div className="focus-lean">
+            <Dial
+              value={focus?.lean ?? 0}
+              onChange={(v) => focus && setSettings({ ...settings, focus: { ...focus, lean: v } })}
+              label={focus ? leanLabel(focus.lean, focus.category) : 'even split'}
+              ariaLabel="Lean — how hard to favour the focused category"
+            />
+          </div>
+          <span className="focus-hint">per round: {splitText}</span>
         </div>
         <label className="partner-toggle">
           <input
@@ -356,9 +367,11 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           </p>
         ) : (
           <>
-            {focusedPool.length < settings.stations && (
+            {CATEGORY_ORDER.some(
+              (c) => split[c] > pool.filter((e) => e.category === c && e.pref !== 'ban').length,
+            ) && (
               <p className="warn">
-                Only {focusedPool.length} exercises for {settings.stations} stations — some will repeat.
+                Not enough exercises to fill every station from the pool — some will repeat.
               </p>
             )}
             <div className="session-actions">

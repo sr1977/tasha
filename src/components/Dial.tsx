@@ -9,10 +9,12 @@ export function Dial({
   value,
   onChange,
   label,
+  ariaLabel = 'How should Tasha behave today?',
 }: {
   value: number;
   onChange: (v: number) => void;
   label?: string;
+  ariaLabel?: string;
 }) {
   const ref = useRef<SVGSVGElement>(null);
   const angle = (value / 100) * SWEEP - SWEEP / 2;
@@ -31,7 +33,7 @@ export function Dial({
       className="dial"
       viewBox="-50 -50 100 100"
       role="slider"
-      aria-label="How should Tasha behave today?"
+      aria-label={ariaLabel}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={value}
