@@ -64,18 +64,35 @@ export function savePool(pool: Exercise[]): void {
   localStorage.setItem(SEED_MARK_KEY, String(SEED_RAW_COUNT));
 }
 
+/** A mix with `pct` on one category and the rest split across the others. */
+function mixOf(category: Category, pct: number): Record<Category, number> {
+  const other = Math.floor((100 - pct) / 2);
+  const mix = { upper: other, lower: other, core: other, [category]: pct };
+  const cats: Category[] = ['upper', 'lower', 'core'];
+  const first = cats.find((c) => c !== category)!;
+  mix[first] += 100 - cats.reduce((sum, c) => sum + mix[c], 0); // absorb rounding
+  return mix;
+}
+
 export function loadSettings(): Settings {
   const parsed = loadJson<unknown>(SETTINGS_KEY, {});
   const partial = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<Settings>) : {};
   const s = { ...DEFAULT_SETTINGS, ...partial };
-  // Focus used to be a category checklist. A single tick was exclusive (only
-  // that category) -> full lean on it; anything else has no equivalent -> even.
-  if (Array.isArray(s.focus)) {
-    const cats = s.focus as unknown as string[];
+  // Focus migrations. Oldest shape: a category checklist — a single tick was
+  // exclusive -> 100% of that category; anything else -> even. Interim shape:
+  // { category, lean } -> the focused share it produced, others splitting the
+  // remainder. Current shape: percentages per category summing to 100.
+  const f: unknown = s.focus;
+  if (Array.isArray(f)) {
+    const cats = f as string[];
     s.focus =
       cats.length === 1 && ['upper', 'lower', 'core'].includes(cats[0])
-        ? { category: cats[0] as Category, lean: 100 }
+        ? mixOf(cats[0] as Category, 100)
         : undefined;
+  } else if (f && typeof f === 'object' && 'lean' in f && 'category' in f) {
+    const { category, lean } = f as { category: Category; lean: number };
+    const pct = Math.round(100 / 3 + (Math.max(0, Math.min(100, lean)) * 2) / 3);
+    s.focus = ['upper', 'lower', 'core'].includes(category) ? mixOf(category, pct) : undefined;
   }
   if (!Array.isArray(s.roster) || !s.roster.every((n) => typeof n === 'string')) {
     s.roster = DEFAULT_ROSTER;

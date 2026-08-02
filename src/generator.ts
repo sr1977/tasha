@@ -1,4 +1,4 @@
-import type { Category, Exercise, FocusConfig, Session, Settings } from './types';
+import type { Category, Exercise, FocusMix, Session, Settings } from './types';
 
 export const PREP_SECS = 10;
 
@@ -44,9 +44,50 @@ export const OVERHEAD_SECS =
   COOLDOWN_GAP_SECS +
   COOLDOWN_MOVES.length * COOLDOWN_SECS;
 
-export function roundCount(s: Settings): number {
-  const roundLength = s.stations * (s.workSecs + s.restSecs) + s.roundRestSecs;
-  return Math.max(1, Math.floor((s.totalMins * 60 - OVERHEAD_SECS) / roundLength));
+/** Exact wall-clock length of a session with this shape. */
+export function sessionSecs(s: Settings, stations: number, rounds: number): number {
+  return (
+    OVERHEAD_SECS +
+    rounds * (stations * s.workSecs + (stations - 1) * s.restSecs) +
+    (rounds - 1) * s.roundRestSecs
+  );
+}
+
+/** Distinct round layouts per session; rounds cycle through them evenly. */
+export const DISTINCT_ROUNDS = 2;
+
+/** Round count landing closest to the target for a given station count.
+ * Always a multiple of DISTINCT_ROUNDS so every layout runs the same number
+ * of times, and never fewer than 2 — a circuit repeats. */
+export function fitRounds(s: Settings, stations: number): number {
+  const target = s.totalMins * 60;
+  const k = DISTINCT_ROUNDS;
+  const start = k * Math.ceil(2 / k); // first multiple of k that is >= 2
+  let best = start;
+  for (let r = start + k; r <= 50; r += k) {
+    if (Math.abs(sessionSecs(s, stations, r) - target) < Math.abs(sessionSecs(s, stations, best) - target)) best = r;
+    else break; // duration grows with r — once the gap widens it never shrinks
+  }
+  return best;
+}
+
+/**
+ * The stations × rounds shape for the target length. Stations always beat
+ * rounds: the most stations whose fit lands within three minutes of the
+ * target wins; only when nothing lands that close does closest duration
+ * decide. Stations range 3–8, never fewer than the group count.
+ */
+export function fitSession(s: Settings): { stations: number; rounds: number } {
+  const target = s.totalMins * 60;
+  const minStations = Math.max(3, s.partner?.on ? s.partner.groups.length : 1);
+  let best = { stations: minStations, rounds: fitRounds(s, minStations) };
+  for (let st = minStations + 1; st <= 8; st++) {
+    const cand = { stations: st, rounds: fitRounds(s, st) };
+    const diff = Math.abs(sessionSecs(s, st, cand.rounds) - target);
+    const bestDiff = Math.abs(sessionSecs(s, best.stations, best.rounds) - target);
+    if (diff <= 180 || diff < bestDiff) best = cand;
+  }
+  return best;
 }
 
 function shuffle<T>(items: T[], rand: () => number): T[] {
@@ -59,17 +100,16 @@ function shuffle<T>(items: T[], rand: () => number): T[] {
 }
 
 /**
- * How many stations each category gets. No focus = even thirds. With a focus,
- * the focused share ramps linearly from 1/3 (lean 0) to all of it (lean 100);
- * the others split what's left. Largest-remainder rounding to whole stations.
+ * How many stations each category gets. No mix (or a degenerate all-zero one)
+ * = even thirds; otherwise each category's share is its percentage of the mix
+ * total. Largest-remainder rounding to whole stations.
  */
-export function stationSplit(stations: number, focus?: FocusConfig): Record<Category, number> {
-  const f = focus ? Math.max(0, Math.min(100, focus.lean)) / 100 : 0;
-  const focusedShare = 1 / 3 + (f * 2) / 3;
-  const otherShare = (1 - focusedShare) / (CATEGORY_ORDER.length - 1);
+export function stationSplit(stations: number, focus?: FocusMix): Record<Category, number> {
+  const weight = (c: Category) => Math.max(0, focus?.[c] ?? 0);
+  const total = CATEGORY_ORDER.reduce((sum, c) => sum + weight(c), 0);
   const exact = CATEGORY_ORDER.map((c) => ({
     c,
-    x: stations * (focus ? (c === focus.category ? focusedShare : otherShare) : 1 / 3),
+    x: stations * (total > 0 ? weight(c) / total : 1 / CATEGORY_ORDER.length),
   }));
   const counts = Object.fromEntries(exact.map(({ c, x }) => [c, Math.floor(x)])) as Record<Category, number>;
   let left = stations - exact.reduce((sum, { x }) => sum + Math.floor(x), 0);
@@ -78,8 +118,46 @@ export function stationSplit(stations: number, focus?: FocusConfig): Record<Cate
   return counts;
 }
 
+/**
+ * Set one category of the mix to `v`, keeping the total at exactly 100.
+ * Dials the user has already set (`touched`, oldest first) are respected:
+ * untouched categories rebalance proportionally into whatever the touched
+ * ones don't claim, and touched ones only give way when that's impossible —
+ * least recently set first.
+ */
+export function rebalanceMix(mix: FocusMix, cat: Category, v: number, touched: Category[]): FocusMix {
+  const others = CATEGORY_ORDER.filter((c) => c !== cat);
+  const untouched = others.filter((c) => !touched.includes(c));
+  const next = { ...mix, [cat]: v };
+  const rest = 100 - v;
+
+  const claimed = others.reduce((sum, c) => (touched.includes(c) ? sum + mix[c] : sum), 0);
+  const room = Math.max(0, rest - claimed);
+  const oldSum = untouched.reduce((sum, c) => sum + mix[c], 0);
+  let used = 0;
+  untouched.forEach((c, i) => {
+    next[c] =
+      i === untouched.length - 1
+        ? room - used
+        : oldSum > 0
+          ? Math.round((room * mix[c]) / oldSum)
+          : Math.round(room / untouched.length);
+    used += next[c];
+  });
+
+  // Whatever still doesn't balance lands on the touched dials, oldest first.
+  let imbalance = rest - others.reduce((sum, c) => sum + next[c], 0);
+  for (const c of touched.filter((c) => others.includes(c))) {
+    if (imbalance === 0) break;
+    const nv = Math.max(0, Math.min(100, next[c] + imbalance));
+    imbalance -= nv - next[c];
+    next[c] = nv;
+  }
+  return next;
+}
+
 /** The per-station category sequence for one round, interleaved. */
-export function focusSlots(stations: number, focus?: FocusConfig): Category[] {
+export function focusSlots(stations: number, focus?: FocusMix): Category[] {
   const remaining = stationSplit(stations, focus);
   const slots: Category[] = [];
   while (slots.length < stations) {
@@ -132,7 +210,7 @@ export function pickStations(
 // Round r uses sets[(r-1) % sets.length], so multiple distinct sets cycle
 // across rounds (pass a single-element array for identical rounds).
 export function buildSession(sets: Exercise[][], s: Settings): Session {
-  const rounds = roundCount(s);
+  const rounds = fitRounds(s, sets[0].length);
   const session: Session = [{ kind: 'prep', duration: PREP_SECS, round: 1, station: 0 }];
   for (const m of WARMUP_MOVES) {
     session.push({ kind: 'warmup', exercise: m, duration: WARMUP_SECS, round: 1, station: 0 });
@@ -236,7 +314,7 @@ export function pickRoundSets(
   numSets: number,
   count: number,
   rand: () => number = Math.random,
-  focus?: FocusConfig,
+  focus?: FocusMix,
 ): Exercise[][] {
   // Same category quota every round: repeat one round's slot list per set.
   const slots = Array.from({ length: numSets }, () => focusSlots(stationsPerRound, focus)).flat();
@@ -252,9 +330,11 @@ export function generateSession(
   rand: () => number = Math.random,
 ): Session {
   const count = s.partner?.on ? s.partner.groups.length : 1;
-  const numSets = Math.max(1, Math.min(s.distinctRounds ?? 1, roundCount(s)));
+  // Station count and rounds both come from the target length now.
+  const { stations, rounds } = fitSession(s);
+  const numSets = Math.min(DISTINCT_ROUNDS, rounds);
   // Focus shapes the work stations only — warm-up and cool-down stay full-body.
-  return buildSession(pickRoundSets(pool, s.stations, numSets, count, rand, s.focus), s);
+  return buildSession(pickRoundSets(pool, stations, numSets, count, rand, s.focus), s);
 }
 
 export function sessionDuration(session: Session): number {

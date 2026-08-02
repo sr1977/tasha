@@ -23,24 +23,18 @@ export interface PartnerConfig {
   groups: string[][];
 }
 
-export interface FocusConfig {
-  category: Category;
-  /** 0–100: how hard to lean. 0 = even split, 100 = the focused category only. */
-  lean: number;
-}
+/** Percentage of work stations per category. Values always sum to 100. */
+export type FocusMix = Record<Category, number>;
 
 export interface Settings {
   workSecs: number;
   restSecs: number;
-  stations: number;
   roundRestSecs: number;
   totalMins: number;
-  /** Number of distinct round layouts that cycle across rounds (1 = every round identical). */
-  distinctRounds?: number;
   /** 0–1: chance the late-set callout is a drill-sergeant jab instead of encouragement. */
   nasty?: number;
-  /** Category emphasis for the work stations. Undefined = even split. */
-  focus?: FocusConfig;
+  /** Category mix for the work stations. Undefined = even split. */
+  focus?: FocusMix;
   partner?: PartnerConfig;
   /** All known people, assigned or not. */
   roster?: string[];
@@ -51,10 +45,8 @@ export const DEFAULT_ROSTER = ['Steve', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 
 export const DEFAULT_SETTINGS: Settings = {
   workSecs: 60,
   restSecs: 20,
-  stations: 6,
   roundRestSecs: 60,
   totalMins: 45,
-  distinctRounds: 2,
   nasty: 0.25,
   partner: {
     on: true,

@@ -76,8 +76,8 @@ describe('storage', () => {
   });
 
   it('round-trips saved settings', () => {
-    saveSettings({ ...DEFAULT_SETTINGS, stations: 8 });
-    expect(loadSettings().stations).toBe(8);
+    saveSettings({ ...DEFAULT_SETTINGS, restSecs: 25 });
+    expect(loadSettings().restSecs).toBe(25);
   });
 
   it('migrates old label-only partner configs to default groups, keeping on/off', () => {
@@ -94,13 +94,22 @@ describe('storage', () => {
     expect(loadSettings().partner!.groups).toEqual(DEFAULT_SETTINGS.partner!.groups);
   });
 
-  it('migrates the old focus checklist: single tick -> full lean, else no focus', () => {
+  it('migrates the old focus checklist: single tick -> 100% of it, else no focus', () => {
     store.set('tasha.settings', JSON.stringify({ focus: ['core'] }));
-    expect(loadSettings().focus).toEqual({ category: 'core', lean: 100 });
+    expect(loadSettings().focus).toEqual({ upper: 0, lower: 0, core: 100 });
     store.set('tasha.settings', JSON.stringify({ focus: ['upper', 'lower'] }));
     expect(loadSettings().focus).toBeUndefined();
     store.set('tasha.settings', JSON.stringify({ focus: [] }));
     expect(loadSettings().focus).toBeUndefined();
+  });
+
+  it('migrates the interim focus+lean shape to a percentage mix summing 100', () => {
+    store.set('tasha.settings', JSON.stringify({ focus: { category: 'core', lean: 100 } }));
+    expect(loadSettings().focus).toEqual({ upper: 0, lower: 0, core: 100 });
+    store.set('tasha.settings', JSON.stringify({ focus: { category: 'core', lean: 50 } }));
+    const mix = loadSettings().focus!;
+    expect(mix.core).toBe(67);
+    expect(mix.upper + mix.lower + mix.core).toBe(100);
   });
 
   it('defaults the roster when missing or malformed', () => {

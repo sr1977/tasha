@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from '../types';
-import { banReplacement, buildSession, CATEGORY_ORDER, generateSession, groupLabel, roundCount, sessionDuration, stationSplit, stationsForRound } from '../generator';
+import { banReplacement, buildSession, CATEGORY_ORDER, DISTINCT_ROUNDS, fitSession, generateSession, groupLabel, rebalanceMix, sessionDuration, stationSplit, stationsForRound } from '../generator';
 import {
   getGoogleVoice,
   getVoiceName,
@@ -50,8 +50,10 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
     window.speechSynthesis?.addEventListener?.('voiceschanged', refresh);
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', refresh);
   }, []);
+  // Stations and rounds both derive from the target length.
+  const fitted = fitSession(settings);
   // One station set per distinct round (rounds cycle these sets).
-  const numSets = Math.max(1, Math.min(settings.distinctRounds ?? 1, roundCount(settings)));
+  const numSets = Math.min(DISTINCT_ROUNDS, fitted.rounds);
   const roundSets = session
     ? Array.from({ length: numSets }, (_, k) => stationsForRound(session, k + 1))
     : null;
@@ -104,36 +106,34 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
       },
     });
 
-  // Focus: one emphasised category plus a lean dial. Tapping the active chip
-  // deselects (back to an even split); full lean = that category only.
-  const focus = settings.focus;
-  const toggleFocus = (cat: Category) =>
-    setSettings({
-      ...settings,
-      focus: focus?.category === cat ? undefined : { category: cat, lean: focus?.lean ?? 50 },
-    });
-  const split = stationSplit(settings.stations, focus);
+  // Focus: a percentage per category, always totalling exactly 100. Dials the
+  // user has set this session hold their value — moving one rebalances the
+  // untouched dials first (touch order lives here, not in settings).
+  const mix = settings.focus ?? { upper: 34, lower: 33, core: 33 };
+  const touchedRef = useRef<Category[]>([]);
+  const setMix = (cat: Category, v: number) => {
+    const next = rebalanceMix(mix, cat, v, touchedRef.current);
+    touchedRef.current = [...touchedRef.current.filter((c) => c !== cat), cat];
+    setSettings({ ...settings, focus: next });
+  };
+  const split = stationSplit(fitted.stations, settings.focus);
   const splitText = CATEGORY_ORDER.filter((c) => split[c] > 0)
     .map((c) => `${split[c]} ${c}`)
     .join(' · ');
-  const leanLabel = (lean: number, cat: Category) =>
-    lean === 0 ? 'even split' : lean < 50 ? `leaning ${cat}` : lean < 100 ? `mostly ${cat}` : `all ${cat}`;
 
   // Wipes the locked-in session and the session numbers. The roster and group
   // assignments are the household's, not this session's — they survive.
   const clearSession = () => {
     if (!confirm('Clear the saved session and reset the session settings to defaults?')) return;
-    const { workSecs, restSecs, stations, roundRestSecs, totalMins, distinctRounds, nasty, focus } =
+    const { workSecs, restSecs, roundRestSecs, totalMins, nasty, focus } =
       DEFAULT_SETTINGS;
     setSession(null);
     setSettings({
       ...settings,
       workSecs,
       restSecs,
-      stations,
       roundRestSecs,
       totalMins,
-      distinctRounds,
       nasty,
       focus,
     });
@@ -187,31 +187,23 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
         <div className="settings-grid">
           {num('workSecs', 'Work (seconds)', 5)}
           {num('restSecs', 'Rest (seconds)', 0)}
-          {num('stations', 'Stations', 1)}
           {num('roundRestSecs', 'Round rest (seconds)', 0)}
           {num('totalMins', 'Target length (minutes)', 5)}
-          {num('distinctRounds', 'Distinct rounds', 1)}
         </div>
-        <div className={`focus${focus ? '' : ' inert'}`}>
+        <div className="focus">
           <span className="focus-kicker">Focus</span>
-          {CATEGORY_ORDER.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              className={`focus-chip${focus?.category === cat ? ' on' : ''}`}
-              aria-pressed={focus?.category === cat}
-              onClick={() => toggleFocus(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-          <div className="focus-lean">
-            <Dial
-              value={focus?.lean ?? 0}
-              onChange={(v) => focus && setSettings({ ...settings, focus: { ...focus, lean: v } })}
-              label={focus ? leanLabel(focus.lean, focus.category) : 'even split'}
-              ariaLabel="Lean — how hard to favour the focused category"
-            />
+          <div className="focus-mixes">
+            {CATEGORY_ORDER.map((cat) => (
+              <div key={cat} className="focus-mix">
+                <Dial
+                  value={mix[cat]}
+                  onChange={(v) => setMix(cat, v)}
+                  label={`${mix[cat]} percent ${cat}`}
+                  ariaLabel={`Percent of stations for ${cat}`}
+                />
+                <span className="focus-mix-label">{cat}</span>
+              </div>
+            ))}
           </div>
           <span className="focus-hint">per round: {splitText}</span>
         </div>
@@ -314,7 +306,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                     <li key={i}>{groupLabel(g, i)}</li>
                   ))}
                 </ol>
-                {settings.stations < groups.length && (
+                {fitted.stations < groups.length && (
                   <p className="warn">
                     Fewer stations than groups — some groups will share a station.
                   </p>
@@ -387,7 +379,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
         {session && roundSets && (
           <>
             <p>
-              {roundCount(settings)} rounds · actual duration {fmt(sessionDuration(session))}
+              {fitted.stations} stations × {fitted.rounds} rounds · actual duration {fmt(sessionDuration(session))}
             </p>
             {roundSets.map((set, k) => (
               <div key={k}>

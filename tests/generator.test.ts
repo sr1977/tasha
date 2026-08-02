@@ -3,7 +3,10 @@ import {
   buildSession,
   generateSession,
   pickStations,
-  roundCount,
+  rebalanceMix,
+  fitRounds,
+  fitSession,
+  sessionSecs,
   sessionDuration,
   replaceInSession,
   banReplacement,
@@ -30,25 +33,51 @@ const pool: Exercise[] = [
   ex('c1', 'core'), ex('c2', 'core'),
 ];
 
-// 2 stations, work 5, rest 3, round rest 7 => roundLength 23; target covers
-// the warm-up/cool-down overhead plus exactly two rounds
+// work 5, rest 3, round rest 7; target = overhead + exactly two 2-station
+// rounds (2×13s work+rest, one 7s round rest), so 2-station builds fit 2 rounds
 const small: Settings = {
   workSecs: 5,
   restSecs: 3,
-  stations: 2,
   roundRestSecs: 7,
-  totalMins: (OVERHEAD_SECS + 2 * 23) / 60,
+  totalMins: (OVERHEAD_SECS + 2 * 13 + 7) / 60,
 };
 
-describe('roundCount', () => {
-  it('computes rounds from the spec formula, net of the bookend overhead', () => {
-    // 6*(60+20)+60 = 540; floor((2700 - OVERHEAD) / 540) = 4
-    expect(roundCount(DEFAULT_SETTINGS)).toBe(4);
-    expect(roundCount(small)).toBe(2);
+describe('fit to target length', () => {
+  it('sessionSecs is the exact wall-clock formula', () => {
+    // overhead + 2 rounds of (2×5 work + 1×3 rest) + one 7s round rest
+    expect(sessionSecs(small, 2, 2)).toBe(OVERHEAD_SECS + 2 * 13 + 7);
   });
 
-  it('always returns at least 1 round', () => {
-    expect(roundCount({ ...small, totalMins: 0.1 as number })).toBe(1);
+  it('fitRounds keeps rounds a multiple of the two distinct layouts', () => {
+    expect(fitRounds(small, 2)).toBe(2);
+    // odd counts are out: 4 is the closest even fit at 6 stations
+    expect(fitRounds(DEFAULT_SETTINGS, 6)).toBe(4);
+    expect(fitRounds(DEFAULT_SETTINGS, 6) % 2).toBe(0);
+  });
+
+  it('fitRounds never returns less than 2 rounds', () => {
+    expect(fitRounds({ ...small, totalMins: 0.1 as number }, 2)).toBe(2);
+  });
+
+  it('fitSession favours stations over rounds among near-target shapes', () => {
+    // 5×6 (46:25) fits closest, but 8×4 (47:45) is still within three minutes
+    // of the 45:00 target — more stations wins
+    expect(fitSession(DEFAULT_SETTINGS)).toEqual({ stations: 8, rounds: 4 });
+  });
+
+  it('fitSession still falls back to closest fit when big circuits miss badly', () => {
+    // 20:00 target: 8 stations lands 5 minutes out, smaller circuits get closer
+    const s = { ...DEFAULT_SETTINGS, totalMins: 20 };
+    const { stations, rounds } = fitSession(s);
+    expect(Math.abs(sessionSecs(s, stations, rounds) - 20 * 60)).toBeLessThanOrEqual(180);
+  });
+
+  it('fitSession keeps at least as many stations as groups', () => {
+    const fourGroups = {
+      ...DEFAULT_SETTINGS,
+      partner: { on: true, groups: [['a'], ['b'], ['c'], ['d']] },
+    };
+    expect(fitSession(fourGroups).stations).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -124,10 +153,11 @@ describe('buildSession', () => {
 });
 
 describe('generateSession', () => {
-  it('produces a full session from a pool', () => {
+  it('produces a full session shaped by the target length', () => {
     const session = generateSession(pool, small);
+    const { stations, rounds } = fitSession(small);
     expect(session[0].kind).toBe('prep');
-    expect(session.filter((i) => i.kind === 'work')).toHaveLength(4);
+    expect(session.filter((i) => i.kind === 'work')).toHaveLength(stations * rounds);
   });
 });
 
@@ -237,7 +267,7 @@ describe('distinct rounds', () => {
   });
 
   it('generateSession makes consecutive rounds differ', () => {
-    const session = generateSession(pool, { ...small, distinctRounds: 2 });
+    const session = generateSession(pool, small);
     expect(stationsForRound(session, 1)).not.toEqual(stationsForRound(session, 2));
   });
 });
@@ -249,64 +279,102 @@ describe('focus', () => {
     ex('c1', 'core'), ex('c2', 'core'),
   ];
 
-  it('splits evenly with no focus', () => {
+  it('splits evenly with no mix', () => {
     expect(stationSplit(6)).toEqual({ upper: 2, lower: 2, core: 2 });
   });
 
-  it('lean 0 matches the even split', () => {
-    expect(stationSplit(6, { category: 'core', lean: 0 })).toEqual({ upper: 2, lower: 2, core: 2 });
+  it('an even mix matches the even split', () => {
+    expect(stationSplit(6, { upper: 34, lower: 33, core: 33 })).toEqual({ upper: 2, lower: 2, core: 2 });
   });
 
-  it('mid lean tilts toward the focused category, keeping the others in', () => {
-    const s = stationSplit(6, { category: 'core', lean: 50 });
-    expect(s.core).toBeGreaterThan(s.upper);
-    expect(s.upper).toBeGreaterThan(0);
-    expect(s.lower).toBeGreaterThan(0);
-    expect(s.upper + s.lower + s.core).toBe(6);
+  it('60/20/20 tilts toward core, keeping the others in', () => {
+    expect(stationSplit(6, { upper: 20, lower: 20, core: 60 })).toEqual({ upper: 1, lower: 1, core: 4 });
   });
 
-  it('full lean is the focused category only', () => {
-    expect(stationSplit(6, { category: 'core', lean: 100 })).toEqual({ upper: 0, lower: 0, core: 6 });
+  it('100% is that category only', () => {
+    expect(stationSplit(6, { upper: 0, lower: 0, core: 100 })).toEqual({ upper: 0, lower: 0, core: 6 });
+  });
+
+  it('a degenerate all-zero mix falls back to even', () => {
+    expect(stationSplit(6, { upper: 0, lower: 0, core: 0 })).toEqual({ upper: 2, lower: 2, core: 2 });
   });
 
   it('always sums to the station count, even at awkward sizes', () => {
     for (const stations of [2, 3, 4, 5, 7]) {
-      for (const lean of [0, 30, 50, 70, 100]) {
-        const s = stationSplit(stations, { category: 'lower', lean });
+      for (const pct of [0, 30, 50, 70, 100]) {
+        const rest = 100 - pct;
+        const s = stationSplit(stations, { upper: Math.ceil(rest / 2), lower: pct, core: Math.floor(rest / 2) });
         expect(s.upper + s.lower + s.core).toBe(stations);
       }
     }
   });
 
   it('focusSlots deals the split as an interleaved category sequence', () => {
-    const slots = focusSlots(6, { category: 'core', lean: 100 });
+    const slots = focusSlots(6, { upper: 0, lower: 0, core: 100 });
     expect(slots).toEqual(['core', 'core', 'core', 'core', 'core', 'core']);
     const even = focusSlots(6);
     expect(even.filter((c) => c === 'upper')).toHaveLength(2);
     expect(even.filter((c) => c === 'core')).toHaveLength(2);
   });
 
-  it('generates work stations only from the focused category at full lean', () => {
-    const session = generateSession(mixed, { ...small, focus: { category: 'core', lean: 100 } });
+  it('generates work stations only from the focused category at 100%', () => {
+    const session = generateSession(mixed, { ...small, focus: { upper: 0, lower: 0, core: 100 } });
     const works = session.filter((i) => i.kind === 'work');
     expect(works.length).toBeGreaterThan(0);
     expect(works.every((i) => i.exercise!.category === 'core')).toBe(true);
   });
 
-  it('keeps every category in the mix at moderate lean', () => {
+  it('keeps every category in the mix at a 60/20/20 split', () => {
     const session = generateSession(mixed, {
       ...small,
       stations: 6,
-      focus: { category: 'core', lean: 50 },
+      focus: { upper: 20, lower: 20, core: 60 },
     });
     const cats = new Set(session.filter((i) => i.kind === 'work').map((i) => i.exercise!.category));
     expect(cats).toEqual(new Set(['upper', 'lower', 'core']));
   });
 
   it('leaves the warm-up and cool-down full-body', () => {
-    const session = generateSession(mixed, { ...small, focus: { category: 'core', lean: 100 } });
+    const session = generateSession(mixed, { ...small, focus: { upper: 0, lower: 0, core: 100 } });
     const other = session.filter((i) => i.kind === 'warmup' || i.kind === 'cooldown');
     expect(other.some((i) => i.exercise!.category !== 'core')).toBe(true);
+  });
+});
+
+describe('rebalanceMix', () => {
+  it('spreads a change proportionally across untouched dials', () => {
+    expect(rebalanceMix({ upper: 34, lower: 33, core: 33 }, 'core', 60, [])).toEqual({
+      upper: 20,
+      lower: 20,
+      core: 60,
+    });
+  });
+
+  it('never moves a dial the user has already set', () => {
+    // core was set to 60 first; setting upper to 30 must drain lower only
+    const next = rebalanceMix({ upper: 20, lower: 20, core: 60 }, 'upper', 30, ['core']);
+    expect(next).toEqual({ upper: 30, lower: 10, core: 60 });
+  });
+
+  it('when every dial is touched, the least recently set gives way', () => {
+    const next = rebalanceMix({ upper: 30, lower: 10, core: 60 }, 'lower', 30, ['core', 'upper']);
+    expect(next).toEqual({ upper: 30, lower: 30, core: 40 });
+  });
+
+  it('drags touched dials in only when untouched ones cannot absorb it', () => {
+    // core (touched) holds 80; raising upper to 50 zeroes lower then takes from core
+    const next = rebalanceMix({ upper: 10, lower: 10, core: 80 }, 'upper', 50, ['core']);
+    expect(next).toEqual({ upper: 50, lower: 0, core: 50 });
+  });
+
+  it('always totals exactly 100', () => {
+    let mix = { upper: 34, lower: 33, core: 33 };
+    const touched: ('upper' | 'lower' | 'core')[] = [];
+    for (const [cat, v] of [['core', 57], ['upper', 13], ['lower', 99], ['core', 1]] as const) {
+      mix = rebalanceMix(mix, cat, v, touched);
+      touched.splice(0, touched.length, ...touched.filter((c) => c !== cat), cat);
+      expect(mix.upper + mix.lower + mix.core).toBe(100);
+    }
   });
 });
 
