@@ -63,6 +63,13 @@ describe('storage', () => {
     expect(loadPool()).toEqual(custom); // idempotent across loads
   });
 
+  it('purges retired seed exercises from saved pools', () => {
+    const retired = { id: 'seed-1', name: 'Pike push-ups', category: 'upper', equipment: 'bodyweight' };
+    store.set('tasha.pool', JSON.stringify([...SEED_POOL, retired]));
+    store.set('tasha.seedMerged', '999'); // no additions pending
+    expect(loadPool().some((e) => e.id === 'seed-1')).toBe(false);
+  });
+
   it('merges partial stored settings over defaults', () => {
     store.set('tasha.settings', JSON.stringify({ workSecs: 30 }));
     expect(loadSettings()).toEqual({ ...DEFAULT_SETTINGS, workSecs: 30 });

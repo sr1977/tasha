@@ -167,9 +167,30 @@ const raw: [string, Category, Equipment, string[]][] = [
     'chest up, ball tight on the way down',
     'one flowing move — no pausing halfway',
   ]],
+  ['Plank shoulder taps', 'core', 'bodyweight', [
+    'hips dead still — tap, don\'t tip',
+    'wide feet for a solid base',
+    'squeeze the floor with the planted hand',
+    'slow taps beat fast wobbles',
+  ]],
+  ['Renegade rows', 'upper', 'dumbbells', [
+    'row from a rock-solid plank — hips square',
+    'pull the elbow past the ribs',
+    'push the floor away with the other hand',
+    'wide feet — no rocking',
+  ]],
 ];
 
-export const SEED_POOL: Exercise[] = raw.map(([name, category, equipment, cues], i) => ({
+// Retired defaults. Ids are positional, so raw entries must never be deleted
+// or reordered — retired ones are filtered out AFTER ids are assigned, and
+// purged from saved pools on load (same treatment as the old cardio category).
+export const RETIRED_SEED_IDS = new Set([
+  'seed-1', // Pike push-ups
+  'seed-13', // Dumbbell deadlifts
+  'seed-14', // Weighted step-ups
+]);
+
+const ALL_SEEDS: Exercise[] = raw.map(([name, category, equipment, cues], i) => ({
   id: `seed-${i}`,
   name,
   category,
@@ -177,3 +198,13 @@ export const SEED_POOL: Exercise[] = raw.map(([name, category, equipment, cues],
   cue: cues[0],
   cues: cues.slice(1),
 }));
+
+export const SEED_POOL: Exercise[] = ALL_SEEDS.filter((e) => !RETIRED_SEED_IDS.has(e.id));
+
+/** Seed-mark units: raw entries ever offered, retired ones included. */
+export const SEED_RAW_COUNT = raw.length;
+
+/** Seed exercises added after `mark`, minus the retired ones. */
+export function seedAdditionsSince(mark: number): Exercise[] {
+  return ALL_SEEDS.slice(mark).filter((e) => !RETIRED_SEED_IDS.has(e.id));
+}

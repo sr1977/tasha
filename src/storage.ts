@@ -1,5 +1,5 @@
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from './types';
-import { SEED_POOL } from './seed';
+import { RETIRED_SEED_IDS, SEED_POOL, SEED_RAW_COUNT, seedAdditionsSince } from './seed';
 
 const POOL_KEY = 'tasha.pool';
 const SETTINGS_KEY = 'tasha.settings';
@@ -35,32 +35,33 @@ function inferSeedMark(pool: Exercise[]): number {
 export function loadPool(): Exercise[] {
   const parsed = loadJson<unknown>(POOL_KEY, null);
   if (!Array.isArray(parsed)) {
-    localStorage.setItem(SEED_MARK_KEY, String(SEED_POOL.length));
+    localStorage.setItem(SEED_MARK_KEY, String(SEED_RAW_COUNT));
     return SEED_POOL;
   }
-  // Cardio was dropped — filter it out of pools saved before the change.
-  // Pools saved before multi-cue seeds adopt the seed's extra cues; an entry
-  // that already has its own cues (user-edited) keeps them.
+  // Dropped defaults (the cardio category, retired seed exercises) are purged
+  // from pools saved before the change. Pools saved before multi-cue seeds
+  // adopt the seed's extra cues; an entry that already has its own cues
+  // (user-edited) keeps them.
   const seedById = new Map(SEED_POOL.map((e) => [e.id, e]));
   const pool = (parsed as Exercise[])
-    .filter((e) => (e.category as string) !== 'cardio')
+    .filter((e) => (e.category as string) !== 'cardio' && !RETIRED_SEED_IDS.has(e.id))
     .map((e) => (!e.cues && seedById.get(e.id)?.cues ? { ...e, cues: seedById.get(e.id)!.cues } : e));
   const stored = localStorage.getItem(SEED_MARK_KEY);
   const mark = stored === null ? inferSeedMark(pool) : Number(stored) || 0;
-  if (mark >= SEED_POOL.length) return pool;
+  if (mark >= SEED_RAW_COUNT) return pool;
   // Persist straight away: the mark may only advance once the merge is durable,
   // or a load-without-save would lose the additions and never offer them again.
   // Skip additions whose name the pool already has — a user-created exercise
   // that later graduates into the seed must not arrive as a duplicate.
   const names = new Set(pool.map((e) => e.name.trim().toLowerCase()));
-  const merged = [...pool, ...SEED_POOL.slice(mark).filter((e) => !names.has(e.name.trim().toLowerCase()))];
+  const merged = [...pool, ...seedAdditionsSince(mark).filter((e) => !names.has(e.name.trim().toLowerCase()))];
   savePool(merged);
   return merged;
 }
 
 export function savePool(pool: Exercise[]): void {
   localStorage.setItem(POOL_KEY, JSON.stringify(pool));
-  localStorage.setItem(SEED_MARK_KEY, String(SEED_POOL.length));
+  localStorage.setItem(SEED_MARK_KEY, String(SEED_RAW_COUNT));
 }
 
 export function loadSettings(): Settings {
