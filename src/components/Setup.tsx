@@ -195,11 +195,15 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           <div className="focus-mixes">
             {CATEGORY_ORDER.map((cat) => (
               <div key={cat} className="focus-mix">
-                <Dial
+                <span className="focus-mix-value">{mix[cat]}</span>
+                <input
+                  type="range"
+                  className="fader"
+                  min={0}
+                  max={100}
                   value={mix[cat]}
-                  onChange={(v) => setMix(cat, v)}
-                  label={`${mix[cat]} percent ${cat}`}
-                  ariaLabel={`Percent of stations for ${cat}`}
+                  onChange={(e) => setMix(cat, Number(e.target.value))}
+                  aria-label={`Percent of stations for ${cat}`}
                 />
                 <span className="focus-mix-label">{cat}</span>
               </div>

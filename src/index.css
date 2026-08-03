@@ -411,12 +411,69 @@ select {
   align-items: center;
   gap: 2px;
 }
-.focus-mix .dial {
-  width: 64px;
-  height: 64px;
+.focus-mix-value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--text);
 }
-.focus-mix .dial .readout {
-  font-size: 30px;
+/* Mixing-desk fader: a native vertical range with a slot, scale ticks, and a
+   hard rectangular cap. ponytail: all drawn with CSS on <input type=range> —
+   no JS, keyboard and a11y come free. */
+.fader {
+  appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl; /* max at the top, like a fader pushed up */
+  width: 44px;
+  height: 140px;
+  margin: 4px 0;
+  cursor: grab;
+  background:
+    /* centre slot */
+    linear-gradient(var(--text), var(--text)) center / 4px calc(100% - 8px) no-repeat,
+    /* scale ticks every 10% */
+    repeating-linear-gradient(
+      to bottom,
+      var(--line) 0 2px,
+      transparent 2px calc((100% - 2px) / 10 + 2px)
+    ) center / 24px calc(100% - 16px) no-repeat;
+}
+.fader:active {
+  cursor: grabbing;
+}
+.fader:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+.fader::-webkit-slider-thumb {
+  appearance: none;
+  width: 40px;
+  height: 20px;
+  border: 3px solid var(--text);
+  border-radius: 0;
+  /* the cap's centre grip line */
+  background:
+    linear-gradient(var(--accent), var(--accent)) center / 100% 3px no-repeat,
+    var(--ink-2);
+}
+.fader:hover::-webkit-slider-thumb {
+  border-color: var(--accent);
+}
+.fader::-moz-range-thumb {
+  width: 40px;
+  height: 20px;
+  border: 3px solid var(--text);
+  border-radius: 0;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center / 100% 3px no-repeat,
+    var(--ink-2);
+}
+.fader:hover::-moz-range-thumb {
+  border-color: var(--accent);
+}
+.fader::-moz-range-track {
+  background: transparent;
 }
 .focus-mix-label {
   font-size: 0.72rem;
