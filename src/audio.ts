@@ -304,26 +304,26 @@ export function encouragement(name: string): string {
 
 // Drill-sergeant jabs — parade-ground bark, British seasoning, household-safe.
 const JABS = [
-  (n: string) => `${n}! My gran does faster reps and she queues for FUN!`,
-  (n: string) => `Get a wiggle on, ${n}! Even the M25 moves quicker than that!`,
-  (n: string) => `${n}, is that a rest? Nobody AUTHORISED a rest!`,
-  (n: string) => `Wakey wakey, ${n} — this is a workout, not an AUDIOBOOK!`,
-  (n: string) => `${n}! I've seen wet lettuce put up more of a fight!`,
-  (n: string) => `Was that a repetition, ${n}, or an INTERPRETIVE DANCE?`,
-  (n: string) => `${n}, my TEA has gone cold watching you dither!`,
-  (n: string) => `Are you exercising, ${n}, or auditioning for a NAP?`,
-  (n: string) => `${n}! You've got the urgency of a bank holiday POST OFFICE!`,
-  (n: string) => `Chop chop, ${n}! This isn't a spa day, SUNBEAM!`,
-  (n: string) => `${n}, scarecrows have better posture — and they're full of STRAW!`,
-  (n: string) => `Shift yourself, ${n}, before I fetch the AIR HORN!`,
-  (n: string) => `${n}! You're flapping about like a deckchair in a GALE!`,
-  (n: string) => `Shall I send a POSTCARD when it's time to move, ${n}?`,
-  (n: string) => `${n}, if dawdling paid wages you'd be a MILLIONAIRE!`,
-  (n: string) => `The kettle boils faster than you warm up, ${n}!`,
-  (n: string) => `${n}! Less dithering, more DELIVERING!`,
-  (n: string) => `Marvellous, ${n} — a masterclass in going NOWHERE! Now GO!`,
-  (n: string) => `${n}, you're creaking about like a HAUNTED WHEELBARROW!`,
-  (n: string) => `Get after it, ${n}! Paint dries with more AMBITION!`,
+  (n: string) => `${n}! Snails are LAPPING you and they carry their HOUSE!`,
+  (n: string) => `Pick it up, ${n}! I've seen faster movement in a DOCTOR'S WAITING ROOM!`,
+  (n: string) => `${n}, that's not effort — that's a GENTLE SUGGESTION of effort!`,
+  (n: string) => `Oi, ${n}! This is a circuit, not a SUNDAY STROLL round the garden centre!`,
+  (n: string) => `${n}! A traffic cone contributes more and it just STANDS there!`,
+  (n: string) => `Is that your top speed, ${n}, or are you BUFFERING?`,
+  (n: string) => `${n}, the BIN LORRY shows up with more enthusiasm — and it's TUESDAY!`,
+  (n: string) => `Are those arms working, ${n}, or just WAVING GOODBYE to the effort?`,
+  (n: string) => `${n}! You move like you're wading through COLD CUSTARD!`,
+  (n: string) => `Look lively, ${n}! Even the QUEUE at the tip moves faster!`,
+  (n: string) => `${n}, a garden GNOME has more explosive power — and it's CONCRETE!`,
+  (n: string) => `Budge yourself, ${n}, before I put you on ROADWORKS duty!`,
+  (n: string) => `${n}! You're wobbling about like a SHOPPING TROLLEY with a bad wheel!`,
+  (n: string) => `Should I book an APPOINTMENT for that next rep, ${n}?`,
+  (n: string) => `${n}, if faffing were an Olympic sport you'd be on the STAMPS!`,
+  (n: string) => `The toaster pops with more urgency than you, ${n}!`,
+  (n: string) => `${n}! Less pondering, more PUMMELLING!`,
+  (n: string) => `Bravo, ${n} — slowest rep I've ever WITNESSED! Now double it!`,
+  (n: string) => `${n}, you're rattling round like a BUS SHELTER in a storm!`,
+  (n: string) => `Come on, ${n}! GLACIERS retreat with more urgency!`,
 ];
 
 // Evil-mode jabs — properly acerbic. ONLY reachable when the nasty dial is
@@ -350,12 +350,28 @@ export const EVIL_JABS = [
 // Stand-in targets when no roster name is available (solo mode).
 export const VOCATIVES = ['sunshine', 'princess', 'champ', 'sleeping beauty', 'your majesty', 'buttercup'];
 
-/** A random playful insult aimed at a named person (or a cheeky stand-in).
+// No jab repeats — regardless of who it's aimed at — until its whole pool has
+// been heard: shuffled-deck draw, one deck per pool, refilled only on exhaustion.
+const jabDecks = new Map<readonly ((n: string) => string)[], ((n: string) => string)[]>();
+function drawJab(pool: readonly ((n: string) => string)[]): (n: string) => string {
+  let deck = jabDecks.get(pool);
+  if (!deck || deck.length === 0) {
+    deck = [...pool];
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    jabDecks.set(pool, deck);
+  }
+  return deck.pop()!;
+}
+
+/** A playful insult aimed at a named person (or a cheeky stand-in). Never
+ * repeats a line — even at a different person — until the pool is exhausted.
  * `evil` switches to the acerbic pool — pass true ONLY in EVIL MODE (nasty === 1). */
 export function jab(name?: string, evil = false): string {
   const n = name ?? VOCATIVES[Math.floor(Math.random() * VOCATIVES.length)];
-  const pool = evil ? EVIL_JABS : JABS;
-  return pool[Math.floor(Math.random() * pool.length)](n);
+  return drawJab(evil ? EVIL_JABS : JABS)(n);
 }
 
 // Mid-set halfway shouts — pure enthusiasm, no name needed (solo mode).

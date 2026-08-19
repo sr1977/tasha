@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { activityShout, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, VOCATIVES } from '../src/audio';
 import { SEED_POOL } from '../src/seed';
 
+// Must run first: jab's no-repeat deck is module state, and this test needs a
+// fresh deck to observe one exact full cycle.
+describe('jab no-repeat cycling', () => {
+  it('never repeats a line within a pool cycle, even aimed at different people', () => {
+    const lines = Array.from({ length: EVIL_JABS.length }, (_, i) => {
+      const name = i % 2 ? 'Xerxes' : 'Yolanda';
+      return jab(name, true).replaceAll(name, 'N');
+    });
+    expect(new Set(lines).size).toBe(EVIL_JABS.length);
+  });
+});
+
 describe('jab evil gating', () => {
   const evilLines = EVIL_JABS.map((f) => f('Steve'));
 
