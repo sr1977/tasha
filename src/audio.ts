@@ -93,9 +93,17 @@ export function googleTtsActive(): boolean {
 
 let currentAudio: HTMLAudioElement | null = null;
 
+/** Chirp occasionally reads an ALL-CAPS emphasis word as spelled letters, and
+ * the phrase cache would pin that bad take forever — so caps are flattened for
+ * the Google request only. The local fallback voice still gets them. */
+export function ttsText(text: string): string {
+  return text.replace(/\b[A-Z]{2,}\b/g, (w) => w.toLowerCase());
+}
+
 // Phrases repeat every workout — cache synthesized MP3s so repeat announcements
 // are instant, free, and work offline. The URL is only a cache key.
-async function fetchTtsBlob(text: string, rate: number, key: string): Promise<Blob> {
+async function fetchTtsBlob(rawText: string, rate: number, key: string): Promise<Blob> {
+  const text = ttsText(rawText);
   const voice = getGoogleVoice();
   const cacheReq = new Request(
     `https://tts.tasha.invalid/${voice}/${rate}/${encodeURIComponent(text)}`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityShout, AMANDA_MAX, amandaLine, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, VOCATIVES } from '../src/audio';
+import { activityShout, AMANDA_MAX, amandaLine, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, ttsText, VOCATIVES } from '../src/audio';
 import { SEED_POOL } from '../src/seed';
 
 // Must run first: jab's no-repeat deck is module state, and this test needs a
@@ -11,6 +11,18 @@ describe('jab no-repeat cycling', () => {
       return jab(name, true).replaceAll(name, 'N');
     });
     expect(new Set(lines).size).toBe(EVIL_JABS.length);
+  });
+});
+
+describe('ttsText', () => {
+  it('lowercases all-caps emphasis words so Chirp never spells them out', () => {
+    expect(ttsText('Warm up the LEGS, not the EXCUSES — NO moaning!')).toBe(
+      'Warm up the legs, not the excuses — no moaning!',
+    );
+  });
+
+  it('leaves mixed case, names, and the word I alone', () => {
+    expect(ttsText("Amanda! I've seen it all")).toBe("Amanda! I've seen it all");
   });
 });
 
