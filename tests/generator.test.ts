@@ -17,6 +17,9 @@ import {
   stationSplit,
   OVERHEAD_SECS,
   PREP_SECS,
+  packGroups,
+  placeInGroups,
+  MAX_GROUPS,
 } from '../src/generator';
 import { DEFAULT_SETTINGS, type Category, type Equipment, type Exercise, type Settings } from '../src/types';
 
@@ -480,5 +483,39 @@ describe('groupExercises', () => {
 
   it('count 1 is the station’s own exercise', () => {
     expect(groupExercises(stations, 3, 1).map((e) => e.id)).toEqual(['s3']);
+  });
+});
+
+describe('packGroups', () => {
+  it('splits oversized groups into pairs preserving order', () => {
+    expect(packGroups([['a', 'b', 'c']])).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('leaves valid pairs and singles alone — never merges', () => {
+    expect(packGroups([['a'], ['b', 'c']])).toEqual([['a'], ['b', 'c']]);
+  });
+
+  it('drops empty groups', () => {
+    expect(packGroups([[], ['a', 'b'], []])).toEqual([['a', 'b']]);
+  });
+
+  it('caps at MAX_GROUPS, overflow members drop to the bench', () => {
+    const groups = Array.from({ length: MAX_GROUPS }, (_, i) => [`p${i}`, `q${i}`]);
+    expect(packGroups([...groups, ['extra']])).toEqual(groups);
+  });
+});
+
+describe('placeInGroups', () => {
+  it('fills the first group with a free slot', () => {
+    expect(placeInGroups([['a'], ['b']], 'x')).toEqual([['a', 'x'], ['b']]);
+  });
+
+  it('starts a new group when all pairs are full', () => {
+    expect(placeInGroups([['a', 'b']], 'x')).toEqual([['a', 'b'], ['x']]);
+  });
+
+  it('returns groups unchanged when at capacity', () => {
+    const full = Array.from({ length: MAX_GROUPS }, (_, i) => [`p${i}`, `q${i}`]);
+    expect(placeInGroups(full, 'x')).toEqual(full);
   });
 });

@@ -366,6 +366,29 @@ export function banReplacement(
   return candidates[Math.floor(rand() * candidates.length)];
 }
 
+// Groups hold at most two people and there are at most four groups; membership
+// reshuffles automatically as people join and leave.
+export const MAX_GROUP_SIZE = 2;
+export const MAX_GROUPS = 4;
+
+/** Normalise groups: split oversized ones into pairs (order-preserving, never
+ * merging existing groups), drop empties, cap at MAX_GROUPS (overflow members
+ * fall to the bench). */
+export function packGroups(groups: string[][]): string[][] {
+  return groups
+    .flatMap((g) => Array.from({ length: Math.ceil(g.length / MAX_GROUP_SIZE) }, (_, i) => g.slice(i * MAX_GROUP_SIZE, (i + 1) * MAX_GROUP_SIZE)))
+    .filter((g) => g.length > 0)
+    .slice(0, MAX_GROUPS);
+}
+
+/** Add a person to the first group with a free slot, or a new group; unchanged
+ * when every group is full and MAX_GROUPS is reached. */
+export function placeInGroups(groups: string[][], person: string): string[][] {
+  const slot = groups.findIndex((g) => g.length < MAX_GROUP_SIZE);
+  if (slot >= 0) return groups.map((g, i) => (i === slot ? [...g, person] : g));
+  return groups.length < MAX_GROUPS ? [...groups, [person]] : groups;
+}
+
 // Display/announce name for a group: its members, or a numbered fallback when
 // no one is assigned yet.
 export function groupLabel(group: string[] | undefined, index: number): string {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from '../types';
-import { banReplacement, buildSession, CATEGORY_ORDER, DISTINCT_ROUNDS, fitSession, generateSession, groupLabel, rebalanceMix, sessionDuration, stationSplit, stationsForRound } from '../generator';
+import { banReplacement, buildSession, CATEGORY_ORDER, DISTINCT_ROUNDS, fitSession, generateSession, groupLabel, MAX_GROUP_SIZE, MAX_GROUPS, packGroups, placeInGroups, rebalanceMix, sessionDuration, stationSplit, stationsForRound } from '../generator';
 import {
   getGoogleVoice,
   getVoiceName,
@@ -81,15 +81,18 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
   const setGroups = (next: string[][]) =>
     setSettings({ ...settings, partner: { on: true, groups: next } });
 
+  // Groups reshuffle automatically: two per group max, empty groups vanish,
+  // the group count follows the headcount.
   const assign = (person: string, index: number) => {
     const next = groups.map((g) => g.filter((p) => p !== person));
-    if (index >= 0) next[index] = [...next[index], person];
-    setGroups(next);
+    if (index >= 0 && index < MAX_GROUPS && (next[index]?.length ?? 0) < MAX_GROUP_SIZE) {
+      next[index] = [...(next[index] ?? []), person];
+    }
+    setGroups(packGroups(next));
   };
   const removeFromSession = (person: string) => assign(person, -1); // stays on the bench
-  const addToSession = (person: string) => assign(person, 0); // into the first group
-  const setGroupCount = (n: number) =>
-    setGroups(Array.from({ length: n }, (_, i) => groups[i] ?? [])); // members of dropped groups fall to the bench
+  const addToSession = (person: string) => setGroups(placeInGroups(groups, person));
+  const sessionFull = groups.length >= MAX_GROUPS && groups.every((g) => g.length >= MAX_GROUP_SIZE);
   const addPerson = () => {
     const name = newPerson.trim();
     if (!name || roster.includes(name)) return;
@@ -102,7 +105,7 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
       roster: roster.filter((p) => p !== person),
       partner: settings.partner && {
         ...settings.partner,
-        groups: groups.map((g) => g.filter((p) => p !== person)),
+        groups: packGroups(groups.map((g) => g.filter((p) => p !== person))),
       },
     });
 
@@ -227,15 +230,6 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
           />
           Group mode — rotate together on offset stations
         </label>
-        {groupMode && (
-          <div className="partner-count">
-            <select value={groups.length} onChange={(e) => setGroupCount(Number(e.target.value))}>
-              {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>{n === 1 ? '1 group' : `${n} groups`}</option>
-              ))}
-            </select>
-          </div>
-        )}
         {/* The roster is managed with or without group mode: Tasha shouts these
             names either way, so hiding it behind the toggle stranded you with no
             way to add anyone. Group assignment is the only group-mode-only bit. */}
@@ -252,9 +246,14 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                           value={groupOf(person)}
                           onChange={(e) => assign(person, Number(e.target.value))}
                         >
-                          {groups.map((_, i) => (
-                            <option key={i} value={i}>{`Group ${i + 1}`}</option>
+                          {groups.map((g, i) => (
+                            <option key={i} value={i} disabled={i !== groupOf(person) && g.length >= MAX_GROUP_SIZE}>
+                              {`Group ${i + 1}`}
+                            </option>
                           ))}
+                          {groups.length < MAX_GROUPS && (
+                            <option value={groups.length}>New group</option>
+                          )}
                         </select>
                         <button onClick={() => removeFromSession(person)} title="Remove from this session">
                           ✕
@@ -279,7 +278,11 @@ export function Setup({ pool, settings, setSettings, session, setSession, onStar
                   <span className="bench-label">Not in this session</span>
                   {bench.map((person) => (
                     <span key={person} className="bench-person">
-                      <button onClick={() => addToSession(person)} title="Add to this session">
+                      <button
+                        onClick={() => addToSession(person)}
+                        disabled={sessionFull}
+                        title={sessionFull ? `Session is full (${MAX_GROUPS * MAX_GROUP_SIZE} people)` : 'Add to this session'}
+                      >
                         + {person}
                       </button>
                       <button

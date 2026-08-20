@@ -19,7 +19,9 @@ export interface Exercise {
 
 export interface PartnerConfig {
   on: boolean;
-  /** groups[i] = people assigned to group i; length is the group count (1–4). */
+  /** groups[i] = people assigned to group i; length is the group count (1–4),
+   * at most two people per group. Membership updates automatically as people
+   * join and leave (see packGroups/placeInGroups in generator.ts). */
   groups: string[][];
 }
 
@@ -40,7 +42,7 @@ export interface Settings {
   roster?: string[];
 }
 
-export const DEFAULT_ROSTER = ['Steve', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny'];
+export const DEFAULT_ROSTER = ['Steve', 'Rebecca', 'Kathleen', 'Silki', 'Stew', 'Carl', 'Johnny', 'Amanda'];
 
 export const DEFAULT_SETTINGS: Settings = {
   workSecs: 60,
@@ -52,7 +54,8 @@ export const DEFAULT_SETTINGS: Settings = {
     on: true,
     groups: [
       ['Steve', 'Rebecca'],
-      ['Kathleen', 'Silki', 'Stew'],
+      ['Kathleen', 'Silki'],
+      ['Stew'],
     ],
   },
   roster: DEFAULT_ROSTER,

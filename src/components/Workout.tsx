@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Exercise, PartnerConfig, Session } from '../types';
 import { initTimer, timerReducer } from '../timer';
-import { activityShout, beep, cancelSpeech, type CalloutSlot, encouragement, formShout, halfwayShout, jab, offSpeaking, onSpeaking, pickCalloutSlots, pushShout, SHOUT, speak, teamShout, transitionTone, warmupJibe } from '../audio';
+import { activityShout, AMANDA_WARMUP_BARB, amandaLine, beep, cancelSpeech, type CalloutSlot, encouragement, formShout, halfwayShout, jab, offSpeaking, onSpeaking, pickCalloutSlots, pushShout, SHOUT, speak, teamShout, transitionTone, warmupJibe } from '../audio';
 import { announcementText } from '../coach';
 import { banReplacement, groupExercises, groupLabel, replaceInSession, sessionDuration, stationsForRound } from '../generator';
 import { fmt } from './Setup';
@@ -234,6 +234,8 @@ export function Workout({
   const prevStatus = useRef(state.status);
   const halfwayRef = useRef(-1); // interval index that already got its halfway call
   const jabRef = useRef(-1); // interval index that already got its late callout
+  const amandaRef = useRef(0); // Amanda lines spent this session (see AMANDA_MAX)
+  const amandaWarmupRef = useRef(false); // her one-shot warm-up barb has played
   const earlyRef = useRef(-1); // interval index that already got its early callout
   // Fair rotation: everyone gets a turn before anyone repeats (shuffled cycles).
   const encQueueRef = useRef<string[]>([]);
@@ -343,7 +345,10 @@ export function Workout({
         halfwayRef.current !== state.index
       ) {
         halfwayRef.current = state.index;
-        speak(warmupJibe(), SHOUT);
+        // Amanda gets her personal welcome on the first warm-up move.
+        const barb = people.includes('Amanda') && !amandaWarmupRef.current ? AMANDA_WARMUP_BARB : null;
+        if (barb) amandaWarmupRef.current = true;
+        speak(barb ?? warmupJibe(), SHOUT);
       }
       // Cool-down stretches work one side at a time — call the swap at halfway.
       if (
@@ -395,11 +400,16 @@ export function Workout({
         calloutSlots(state.index, cur.duration).includes('late')
       ) {
         jabRef.current = state.index;
-        // Nasty-dial odds of a drill-sergeant jab; no roster -> cheeky vocative.
+        // Amanda's personal needle occasionally hijacks the slot, capped per
+        // session; otherwise nasty-dial odds of a drill-sergeant jab.
+        const amanda =
+          people.includes('Amanda') && Math.random() < 0.25 ? amandaLine(amandaRef.current) : null;
+        if (amanda) amandaRef.current++;
         speak(
-          Math.random() < nasty
-            ? jab(people.length > 0 ? drawName(jabQueueRef, people) : undefined, nasty >= 1)
-            : spur(),
+          amanda ??
+            (Math.random() < nasty
+              ? jab(people.length > 0 ? drawName(jabQueueRef, people) : undefined, nasty >= 1)
+              : spur()),
           SHOUT,
         );
       }

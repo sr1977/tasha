@@ -1,5 +1,6 @@
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, type Category, type Exercise, type Session, type Settings } from './types';
 import { RETIRED_SEED_IDS, SEED_POOL, SEED_RAW_COUNT, seedAdditionsSince } from './seed';
+import { packGroups } from './generator';
 
 const POOL_KEY = 'tasha.pool';
 const SETTINGS_KEY = 'tasha.settings';
@@ -106,6 +107,9 @@ export function loadSettings(): Settings {
   if (s.partner && !validGroups) {
     // Reset assignments (e.g. migrating old label-only configs); keep on/off.
     s.partner = { on: Boolean(s.partner.on), groups: DEFAULT_SETTINGS.partner!.groups };
+  } else if (s.partner) {
+    // Groups saved before the two-per-group rule get split into pairs.
+    s.partner = { ...s.partner, groups: packGroups(s.partner.groups) };
   }
   return s;
 }

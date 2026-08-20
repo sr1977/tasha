@@ -324,6 +324,21 @@ const JABS = [
   (n: string) => `Bravo, ${n} — slowest rep I've ever WITNESSED! Now double it!`,
   (n: string) => `${n}, you're rattling round like a BUS SHELTER in a storm!`,
   (n: string) => `Come on, ${n}! GLACIERS retreat with more urgency!`,
+  (n: string) => `${n}! The SPEED CAMERA didn't even flash — and it flashes for CYCLISTS!`,
+  (n: string) => `Recalculating, ${n} — even the SAT-NAV has given up on that route!`,
+  (n: string) => `${n}, PIGEONS commit harder to a chip than you do to a squat!`,
+  (n: string) => `Is this a workout, ${n}, or a MOMENT OF SILENCE?`,
+  (n: string) => `${n}! Motorway SERVICES have more get-up-and-go, and they're BOLTED DOWN!`,
+  (n: string) => `Rain stopped play, has it, ${n}? There ISN'T ANY RAIN!`,
+  (n: string) => `${n}, the SELF-CHECKOUT has fewer unexpected pauses than you!`,
+  (n: string) => `Faster, ${n}! The POSTMAN delivers more and he's on his TEA BREAK!`,
+  (n: string) => `${n}! You're circling that rep like a ROUNDABOUT with no exit!`,
+  (n: string) => `Put some SNAP into it, ${n} — you're moving like DIAL-UP INTERNET!`,
+  (n: string) => `${n}, a PARK BENCH sees more action — and it's COMMEMORATIVE!`,
+  (n: string) => `Are you exercising, ${n}, or posing for a MUSEUM EXHIBIT?`,
+  (n: string) => `${n}! Even LAWN BOWLS has more explosive moments!`,
+  (n: string) => `That's drizzle-pace, ${n} — I want THUNDERSTORM!`,
+  (n: string) => `${n}, the ZEBRA CROSSING beacon blinks with more intensity!`,
 ];
 
 // Evil-mode jabs — properly acerbic. ONLY reachable when the nasty dial is
@@ -345,7 +360,31 @@ export const EVIL_JABS = [
   (n: string) => `That waistline is a MONUMENT to sitting down, ${n} — DEMOLISH it!`,
   (n: string) => `${n}, you burn fewer calories than the FRIDGE LIGHT you keep triggering!`,
   (n: string) => `Run, ${n}! Pretend the ICE CREAM VAN is leaving!`,
+  (n: string) => `${n}! The STAIRS aren't optional — that's why you and the LIFT are so close!`,
+  (n: string) => `Elasticated waistbands are LOAD-BEARING for you, ${n} — show them MERCY!`,
+  (n: string) => `${n}, your BATHROOM SCALES flinch when the landing light comes on!`,
+  (n: string) => `Second helpings built that, ${n} — second EFFORTS can tear it down!`,
+  (n: string) => `${n}! The delivery driver knows your DOG'S birthday — that's a PROBLEM!`,
+  (n: string) => `Your SHADOW puts in more work, ${n}, and it's just LYING there!`,
+  (n: string) => `${n}, that gym membership is a CHARITY DONATION — today we collect!`,
+  (n: string) => `Chin UP, ${n} — pick WHICHEVER one you like!`,
 ] as const;
+
+// Personal needle lines for Amanda, fired only when she's in the session and
+// hard-capped so they land as a running joke, not a campaign.
+// ponytail: hardcoded for one person; make a per-person map if others earn lines
+const AMANDA_LINES = ['Stop slacking, Amanda!', 'Quit the moaning, Amanda!'] as const;
+export const AMANDA_MAX = 3;
+
+/** One-shot warm-up barb for Amanda — fired at most once per session, on top
+ * of (not counted against) the AMANDA_MAX mid-set cap. */
+export const AMANDA_WARMUP_BARB = "Amanda! Warm up the LEGS, not the EXCUSES — I want zero slacking and NO moaning today!";
+
+/** The next Amanda line given how many have already played this session, or
+ * null once the session cap is spent. Caller owns the counter. */
+export function amandaLine(count: number): string | null {
+  return count < AMANDA_MAX ? AMANDA_LINES[count % AMANDA_LINES.length] : null;
+}
 
 // Stand-in targets when no roster name is available (solo mode).
 export const VOCATIVES = ['sunshine', 'princess', 'champ', 'sleeping beauty', 'your majesty', 'buttercup'];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityShout, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, VOCATIVES } from '../src/audio';
+import { activityShout, AMANDA_MAX, amandaLine, encouragement, EVIL_JABS, formShout, jab, pickCalloutSlots, pickVoice, teamShout, VOCATIVES } from '../src/audio';
 import { SEED_POOL } from '../src/seed';
 
 // Must run first: jab's no-repeat deck is module state, and this test needs a
@@ -11,6 +11,19 @@ describe('jab no-repeat cycling', () => {
       return jab(name, true).replaceAll(name, 'N');
     });
     expect(new Set(lines).size).toBe(EVIL_JABS.length);
+  });
+});
+
+describe('amandaLine', () => {
+  it('cycles through the lines while under the session cap', () => {
+    expect(amandaLine(0)).toBe('Stop slacking, Amanda!');
+    expect(amandaLine(1)).toBe('Quit the moaning, Amanda!');
+    expect(amandaLine(2)).toBe('Stop slacking, Amanda!');
+  });
+
+  it('goes quiet once the session cap is reached', () => {
+    expect(amandaLine(AMANDA_MAX)).toBeNull();
+    expect(amandaLine(AMANDA_MAX + 5)).toBeNull();
   });
 });
 

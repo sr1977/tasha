@@ -87,6 +87,11 @@ describe('storage', () => {
     expect(loadSettings().partner).toEqual({ on: false, groups: DEFAULT_SETTINGS.partner!.groups });
   });
 
+  it('re-packs stored groups of 3+ into pairs on load', () => {
+    store.set('tasha.settings', JSON.stringify({ partner: { on: true, groups: [['a', 'b', 'c'], ['d']] } }));
+    expect(loadSettings().partner!.groups).toEqual([['a', 'b'], ['c'], ['d']]);
+  });
+
   it('rejects out-of-range or malformed group arrays', () => {
     store.set('tasha.settings', JSON.stringify({ partner: { on: true, groups: [] } }));
     expect(loadSettings().partner!.groups).toEqual(DEFAULT_SETTINGS.partner!.groups);
